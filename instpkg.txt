@@ -13,6 +13,7 @@ dmidecode
 dmraid
 dnsmasq
 dosfstools
+duf
 e2fsprogs
 edk2-shell
 efibootmgr
@@ -52,6 +53,7 @@ mdadm
 memtest86+
 mtools
 nano
+nano-syntax-highlighting
 neofetch
 nbd
 ndisc6
@@ -210,3 +212,10 @@ ttf-liberation
 ttf-opensans
 ttf-roboto
 ttf-ubuntu-font-family
+
+
+firefox
+firefox-i18n-de
+flatpak
+libreoffice-fresh-de
+upower
