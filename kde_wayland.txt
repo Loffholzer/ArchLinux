@@ -1,6 +1,7 @@
 ark
 dolphin
 egl-wayland
+hunspell
 hunspell-de
 hyphen-de
 mythes-de
