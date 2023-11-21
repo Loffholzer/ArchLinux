@@ -1,6 +1,9 @@
 ark
 dolphin
 egl-wayland
+hunspell-de
+hyphen-de
+mythes-de
 konsole
 kwrite
 networkmanager-qt5
