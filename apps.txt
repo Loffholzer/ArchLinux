@@ -1,5 +1,9 @@
 firefox
+firefox-dark-reader
 firefox-i18n-de
+thunderbird
+thunderbird-dark-reader
+thunderbird-i18n-de
 flatpak
 libreoffice-fresh-de
 upower
