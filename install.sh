@@ -74,5 +74,19 @@ if [ "$kde_wayland" = true ] ; then pacman -S --needed - <kde_wayland.txt ; fi
 if [ "$apps" = true ] ; then pacman -S --needed - <apps.txt ; fi
 
 ##---------------------------------------------------------------------------------------
-## enable services
+## enable/disable services
 ##---------------------------------------------------------------------------------------
+systemctl disable dhcpcd.service
+
+systemctl enable avahi-daemon.service
+systemctl enable cups.service
+systemctl enable bluetooth.service
+systemctl enable sshd.service
+systemctl enable firewalld.service
+systemctl enable NetworkManager.service
+systemctl enable sddm.service
+systemctl enable haveged.service
+systemctl enable upower.service
+
+systemctl enable fstrim.timer
+
