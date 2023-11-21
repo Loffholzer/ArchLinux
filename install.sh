@@ -7,7 +7,17 @@
 ## date:         2023-11-23
 ##-----------------------------------------------------------------------------------
 
-
+##---------------------------------------------------------------------------------------
+## Activate/deactivate *.txt lists (true/false)
+##---------------------------------------------------------------------------------------
+basis=true
+drivers=true
+network=true
+multimedia=true
+printer=true
+fonts=true
+kde_wayland=true
+apps=true
 ##---------------------------------------------------------------------------------------
 ## Edit /etc/pacman.conf
 ##---------------------------------------------------------------------------------------
@@ -54,10 +64,14 @@ sed -i '/nano\/\*\.nanorc/s/^#.//' /etc/nanorc
 ##---------------------------------------------------------------------------------------
 ## Install
 ##---------------------------------------------------------------------------------------
-pacman -S --needed - <basis.txt
-pacman -S --needed - <drivers.txt
-pacman -S --needed - <fonts.txt
-pacman -S --needed - <basis.txt
+if [ "$basis" = true ] ; then pacman -S --needed - <basis.txt ; fi
+if [ "$drivers" = true ] ; then pacman -S --needed - <drivers.txt ; fi
+if [ "$network" = true ] ; then pacman -S --needed - <network.txt ; fi
+if [ "$multimedia" = true ] ; then pacman -S --needed - <multimedia.txt ; fi
+if [ "$printer" = true ] ; then pacman -S --needed - <printer.txt ; fi
+if [ "$fonts" = true ] ; then pacman -S --needed - <fonts.txt ; fi
+if [ "$kde_wayland" = true ] ; then pacman -S --needed - <kde_wayland.txt ; fi
+if [ "$apps" = true ] ; then pacman -S --needed - <apps.txt ; fi
 
 ##---------------------------------------------------------------------------------------
 ## enable services
