@@ -55,8 +55,8 @@ sed -i '/nano\/\*\.nanorc/s/^#.//' /etc/nanorc
 ## Install
 ##---------------------------------------------------------------------------------------
 pacman -S --needed - <basis.txt
-pacman -S --needed - <basis.txt
-pacman -S --needed - <basis.txt
+pacman -S --needed - <drivers.txt
+pacman -S --needed - <fonts.txt
 pacman -S --needed - <basis.txt
 
 ##---------------------------------------------------------------------------------------
