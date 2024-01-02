@@ -30,6 +30,10 @@
       Install
       chroot              yes
 - check /etc/fstab        (SSD)
-    .....btrfs      rw,ssd,noatime,compression=zstd,subvolid.....
+    .....btrfs      rw,ssd,noatime,compress=zstd,subvolid.....
 - check /etc/mkinitcpio.conf HOOKS=.....encrypt filesystem..... (sequence)
 - reboot
+
+# Optional
+
+git clone https://aur.archlinux.com/yay
