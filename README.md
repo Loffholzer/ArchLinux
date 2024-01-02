@@ -36,4 +36,13 @@
 
 # Optional
 
-git clone https://aur.archlinux.com/yay
+user
+
+sudo usermod mc -s /usr/bin/fish
+
+/etc/vconsole.conf (add)
+    FONT=ter-118b
+/home/[USER]/.config/fish/config.fish (add)
+    fish_greeting
+    neofetch
+git clone https://aur.archlinux.org/yay (makepkg -si)
