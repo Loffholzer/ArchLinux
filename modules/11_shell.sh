@@ -66,25 +66,27 @@ zeige_shell_plan() {
 # =========================
 
 installiere_shell_tools() {
+  # Vollständige Liste aller in der config.fish genutzten Tools
   local packages=(
     fish
     starship
     eza
     bat
-    bottom
-    nerd-fonts
+    btop
+    fastfetch
+    zoxide
+    ttf-jetbrains-mono-nerd
   )
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Shell-Tools und Nerd Fonts installieren:"
-    warn "  ${packages[*]}"
+    warn "[DRY-RUN] würde Shell-Tools installieren: ${packages[*]}"
     return 0
   fi
 
-  log "Installiere Shell-Tools und Nerd Fonts..."
+  log "Installiere Shell-Tools, Zoxide und Fonts..."
 
   arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
-    error "Shell-Tools konnten nicht installiert werden."
+    error "Shell-Tools konnten nicht vollständig installiert werden."
     exit 1
   }
 }
@@ -152,15 +154,26 @@ setze_aliases() {
 
   mkdir -p "$fish_dir_user" "$fish_dir_root"
 
-  # Monolithischer Block für saubere Idempotenz
+  # Erstellung der Config mit Prüfung, ob Tools existieren (verhindert Fehlermeldungen)
   cat << 'EOF' > "$config_file_user"
 # --- System Init ---
 set -g fish_greeting
-fastfetch
+
+# Starte fastfetch nur, wenn es installiert ist
+if type -q fastfetch
+    fastfetch
+end
 
 # --- Prompt & Navigation ---
-starship init fish | source
-zoxide init fish | source
+# Starship Initialisierung
+if type -q starship
+    starship init fish | source
+end
+
+# Zoxide (Smart cd) Initialisierung
+if type -q zoxide
+    zoxide init fish | source
+end
 
 # --- Professional Aliases ---
 alias ls='eza --icons --group-directories-first'
@@ -173,14 +186,11 @@ alias update='sudo pacman -Syu'
 EOF
 
   # Konfiguration auf Root spiegeln
-  cp "$config_file_user" "$config_file_root" || {
-    error "Konnte config.fish nicht nach /root kopieren."
-    exit 1
-  }
+  cp "$config_file_user" "$config_file_root"
 
-  # Rechte sauber auf den jeweiligen Besitzer anwenden
+  # Rechte setzen
   arch-chroot /mnt chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}/.config"
   arch-chroot /mnt chown -R "root:root" "/root/.config"
 
-  success "Shell-Environment für User und Root professionell eingerichtet."
+  success "Shell-Environment (inkl. Zoxide & Fastfetch) korrigiert."
 }
