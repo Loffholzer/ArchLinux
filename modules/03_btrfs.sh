@@ -101,22 +101,10 @@ erstelle_btrfs() {
     return 0
   fi
 
-  local existing_fstype
-
-  existing_fstype="$(blkid -s TYPE -o value "$ROOT_DEVICE" 2>/dev/null || true)"
-
-  if [[ "$existing_fstype" == "btrfs" ]]; then
-    warn "Auf $ROOT_DEVICE existiert bereits BTRFS. Formatierung wird übersprungen."
-    return 0
-  fi
-
-  if [[ -n "$existing_fstype" ]]; then
-    error "$ROOT_DEVICE enthält bereits Dateisystem '$existing_fstype'. Abbruch statt Überschreiben."
-    exit 1
-  fi
+  log "Lösche alte Dateisystemsignaturen auf $ROOT_DEVICE..."
+  wipefs -af "$ROOT_DEVICE" || true
 
   log "Erstelle BTRFS auf $ROOT_DEVICE..."
-
   mkfs.btrfs -f "$ROOT_DEVICE" || {
     error "BTRFS-Erstellung fehlgeschlagen."
     exit 1
