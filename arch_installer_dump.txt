@@ -22,8 +22,8 @@ set -euo pipefail
 # ⚙️ Globale Einstellungen
 # =========================
 
-DRY_RUN=true    # Sicherheitsmodus: keine echten Änderungen
-AUTO_MODE=true  # Überspringt die Abfragen und setzt default werte
+DRY_RUN=false    # Sicherheitsmodus: keine echten Änderungen
+AUTO_MODE=false  # Überspringt die Abfragen und setzt default werte
 
 # Script-Pfade sauber bestimmen (egal von wo gestartet)
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -122,7 +122,7 @@ main "$@"
 # 🧹 Finales Hardening
 # =========================
 
-finales_hardening() {
+run_final_hardening() {
   header "Sicherheit finalisieren"
   if [[ -f "/mnt/etc/sudoers.d/10-installer" ]]; then
     rm -f "/mnt/etc/sudoers.d/10-installer"
@@ -835,6 +835,7 @@ confirm_config() {
 # =========================
 # 🔍 CPU-Microcode automatisch bestimmen
 # =========================
+
 bestimme_microcode_paket() {
   local cpu_vendor
   cpu_vendor=$(grep -m1 'vendor_id' /proc/cpuinfo | awk '{print $3}')
@@ -842,18 +843,18 @@ bestimme_microcode_paket() {
   case "$cpu_vendor" in
     GenuineIntel)
       MICROCODE_PKG="intel-ucode"
-      log "Hardware: Intel CPU erkannt ($MICROCODE_PKG)." [cite: 100]
+      log "Hardware: Intel CPU erkannt ($MICROCODE_PKG)."
       ;;
     AuthenticAMD)
       MICROCODE_PKG="amd-ucode"
-      log "Hardware: AMD CPU erkannt ($MICROCODE_PKG)." [cite: 100]
+      log "Hardware: AMD CPU erkannt ($MICROCODE_PKG)."
       ;;
     *)
       MICROCODE_PKG=""
-      warn "Hardware: Unbekannte CPU. Kein Microcode-Paket gewählt." [cite: 101]
+      warn "Hardware: Unbekannte CPU. Kein Microcode-Paket gewählt."
       ;;
   esac
-  export MICROCODE_PKG [cite: 8]
+  export MICROCODE_PKG
 }
 
 # Initialer Aufruf zur Befüllung der Variable
@@ -1599,26 +1600,27 @@ EOF
 
 installiere_systemdienste() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Systemdienste und Microcode installieren:" [cite: 196]
-    warn "  networkmanager avahi nss-mdns firewalld $MICROCODE_PKG" [cite: 196]
+    warn "[DRY-RUN] würde Systemdienste installieren:"
+    warn "  networkmanager avahi nss-mdns firewalld"
     return 0
   fi
 
-  log "Installiere Systemdienste und Microcode ($MICROCODE_PKG)..." [cite: 197]
+  log "Installiere Systemdienste..."
 
-  # Installation der Dienste plus das dynamisch erkannte Microcode-Paket
-  arch-chroot /mnt pacman -S --noconfirm \
-    networkmanager \
-    avahi \
-    nss-mdns \
-    firewalld \
-    $MICROCODE_PKG || { [cite: 197]
-      error "Systemdienste oder Microcode konnten nicht installiert werden." [cite: 198]
-      exit 1
+  local packages=(
+    networkmanager
+    avahi
+    nss-mdns
+    firewalld
+  )
+
+  arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
+    error "Systemdienste konnten nicht installiert werden."
+    exit 1
   }
 
-  arch-chroot /mnt systemctl enable NetworkManager avahi-daemon firewalld [cite: 199, 201, 203]
-  success "Systemdienste und Microcode installiert und aktiviert." [cite: 205]
+  arch-chroot /mnt systemctl enable NetworkManager avahi-daemon firewalld
+  success "Systemdienste installiert und aktiviert."
 }
 
 --- FILE: modules/06_perf.sh ---
@@ -2054,20 +2056,25 @@ erstelle_limine_config() {
 # =========================
 
 installiere_kernel_und_boottools() {
+  local packages=(
+    linux
+    linux-lts
+    linux-firmware
+    memtest86+-efi
+    limine
+  )
+
+  [[ -n "$MICROCODE_PKG" ]] && packages+=("$MICROCODE_PKG")
+
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Kernel und Boottools installieren:"
-    warn "  linux linux-lts linux-firmware memtest86+-efi limine"
+    warn "  ${packages[*]}"
     return 0
   fi
 
-  log "Installiere Kernel und Boottools..."
+  log "Installiere Kernel, Boottools und Microcode ($MICROCODE_PKG)..."
 
-  arch-chroot /mnt pacman -S --noconfirm \
-    linux \
-    linux-lts \
-    linux-firmware \
-    memtest86+-efi \
-    limine || {
+  arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
       error "Kernel/Boottools konnten nicht installiert werden."
       exit 1
   }
@@ -2430,15 +2437,41 @@ zeige_snapshot_boot_plan() {
 # 📸 Snapshot-Boot Platzhalter
 # =========================
 
-generiere_snapshot_boot_placeholder() {
+generiere_snapshot_entries() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Snapshot-Boot-Platzhalter prüfen"
+    echo "/Snapshots"
+    echo "    comment: Snapshot-Boot wird später dynamisch generiert."
     return 0
   fi
 
-  log "Snapshot-Boot ist vorbereitet. Dynamische Einträge folgen später."
+  local snapshot
+  local snapshot_id
+  local snapshot_date
+  local snapshot_cmdline
+  local found=false
 
-  success "Snapshot-Boot-Platzhalter aktiv."
+  echo "/Snapshots"
+
+  while IFS= read -r snapshot; do
+    snapshot_id="$(basename "$(dirname "$snapshot")")"
+
+    snapshot_date="Snapshot ${snapshot_id}"
+    if [[ -f "/mnt/.snapshots/${snapshot_id}/info.xml" ]]; then
+      snapshot_date="$(grep -oPm1 '(?<=<date>)[^<]+' "/mnt/.snapshots/${snapshot_id}/info.xml" 2>/dev/null || echo "Snapshot ${snapshot_id}")"
+    fi
+
+    snapshot_cmdline="$(baue_snapshot_cmdline "$snapshot_id")" || {
+      warn "CMDLINE für Snapshot ${snapshot_id} fehlgeschlagen, überspringe."
+      continue
+    }
+
+    found=true
+    schreibe_snapshot_entry "$snapshot_date" "$snapshot_id" "$snapshot_cmdline"
+  done < <(finde_snapper_snapshots)
+
+  if [[ "$found" == false ]]; then
+    echo "    comment: Keine bootfähigen Snapshots gefunden."
+  fi
 }
 
 # =========================
@@ -2555,6 +2588,7 @@ finde_snapper_snapshots() {
 # =========================
 # 🧩 Snapshot-Menüeinträge generieren
 # =========================
+
 generiere_snapshot_entries() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     echo "/Snapshots"
@@ -2571,13 +2605,7 @@ generiere_snapshot_entries() {
   echo "/Snapshots"
 
   while IFS= read -r snapshot; do
-    # snapshot ist z.B. /mnt/.snapshots/1/snapshot
     snapshot_id="$(basename "$(dirname "$snapshot")")"
-
-    # Prüfen, ob Kernel im Snapshot existiert
-    if [[ ! -f "$snapshot/boot/vmlinuz-linux" ]]; then
-        continue
-    fi
 
     snapshot_date="Snapshot ${snapshot_id}"
     if [[ -f "/mnt/.snapshots/${snapshot_id}/info.xml" ]]; then
@@ -2651,23 +2679,21 @@ schreibe_snapshot_entry() {
   local snapshot_cmdline="$3"
   local ucode_name=""
 
-  # Namen des Microcode-Images für den Pfad bestimmen
   [[ "$MICROCODE_PKG" == "intel-ucode" ]] && ucode_name="intel-ucode.img"
   [[ "$MICROCODE_PKG" == "amd-ucode" ]] && ucode_name="amd-ucode.img"
 
   cat <<EOF
 //${snapshot_date}
     protocol: linux
-    kernel_path: boot():/@snapshots/${snapshot_id}/snapshot/boot/vmlinuz-linux
+    kernel_path: boot():/vmlinuz-linux
 EOF
 
-  # Microcode aus dem Snapshot-Subvolume einbinden
   if [[ -n "$ucode_name" ]]; then
-    echo "    module_path: boot():/@snapshots/${snapshot_id}/snapshot/boot/${ucode_name}"
+    echo "    module_path: boot():/${ucode_name}"
   fi
 
   cat <<EOF
-    module_path: boot():/@snapshots/${snapshot_id}/snapshot/boot/initramfs-linux.img
+    module_path: boot():/initramfs-linux.img
     cmdline: ${snapshot_cmdline}
 EOF
 }

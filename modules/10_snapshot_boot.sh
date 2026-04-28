@@ -72,15 +72,41 @@ zeige_snapshot_boot_plan() {
 # 📸 Snapshot-Boot Platzhalter
 # =========================
 
-generiere_snapshot_boot_placeholder() {
+generiere_snapshot_entries() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Snapshot-Boot-Platzhalter prüfen"
+    echo "/Snapshots"
+    echo "    comment: Snapshot-Boot wird später dynamisch generiert."
     return 0
   fi
 
-  log "Snapshot-Boot ist vorbereitet. Dynamische Einträge folgen später."
+  local snapshot
+  local snapshot_id
+  local snapshot_date
+  local snapshot_cmdline
+  local found=false
 
-  success "Snapshot-Boot-Platzhalter aktiv."
+  echo "/Snapshots"
+
+  while IFS= read -r snapshot; do
+    snapshot_id="$(basename "$(dirname "$snapshot")")"
+
+    snapshot_date="Snapshot ${snapshot_id}"
+    if [[ -f "/mnt/.snapshots/${snapshot_id}/info.xml" ]]; then
+      snapshot_date="$(grep -oPm1 '(?<=<date>)[^<]+' "/mnt/.snapshots/${snapshot_id}/info.xml" 2>/dev/null || echo "Snapshot ${snapshot_id}")"
+    fi
+
+    snapshot_cmdline="$(baue_snapshot_cmdline "$snapshot_id")" || {
+      warn "CMDLINE für Snapshot ${snapshot_id} fehlgeschlagen, überspringe."
+      continue
+    }
+
+    found=true
+    schreibe_snapshot_entry "$snapshot_date" "$snapshot_id" "$snapshot_cmdline"
+  done < <(finde_snapper_snapshots)
+
+  if [[ "$found" == false ]]; then
+    echo "    comment: Keine bootfähigen Snapshots gefunden."
+  fi
 }
 
 # =========================
@@ -197,6 +223,7 @@ finde_snapper_snapshots() {
 # =========================
 # 🧩 Snapshot-Menüeinträge generieren
 # =========================
+
 generiere_snapshot_entries() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     echo "/Snapshots"
@@ -213,13 +240,7 @@ generiere_snapshot_entries() {
   echo "/Snapshots"
 
   while IFS= read -r snapshot; do
-    # snapshot ist z.B. /mnt/.snapshots/1/snapshot
     snapshot_id="$(basename "$(dirname "$snapshot")")"
-
-    # Prüfen, ob Kernel im Snapshot existiert
-    if [[ ! -f "$snapshot/boot/vmlinuz-linux" ]]; then
-        continue
-    fi
 
     snapshot_date="Snapshot ${snapshot_id}"
     if [[ -f "/mnt/.snapshots/${snapshot_id}/info.xml" ]]; then
@@ -293,23 +314,21 @@ schreibe_snapshot_entry() {
   local snapshot_cmdline="$3"
   local ucode_name=""
 
-  # Namen des Microcode-Images für den Pfad bestimmen
   [[ "$MICROCODE_PKG" == "intel-ucode" ]] && ucode_name="intel-ucode.img"
   [[ "$MICROCODE_PKG" == "amd-ucode" ]] && ucode_name="amd-ucode.img"
 
   cat <<EOF
 //${snapshot_date}
     protocol: linux
-    kernel_path: boot():/@snapshots/${snapshot_id}/snapshot/boot/vmlinuz-linux
+    kernel_path: boot():/vmlinuz-linux
 EOF
 
-  # Microcode aus dem Snapshot-Subvolume einbinden
   if [[ -n "$ucode_name" ]]; then
-    echo "    module_path: boot():/@snapshots/${snapshot_id}/snapshot/boot/${ucode_name}"
+    echo "    module_path: boot():/${ucode_name}"
   fi
 
   cat <<EOF
-    module_path: boot():/@snapshots/${snapshot_id}/snapshot/boot/initramfs-linux.img
+    module_path: boot():/initramfs-linux.img
     cmdline: ${snapshot_cmdline}
 EOF
 }

@@ -199,20 +199,25 @@ erstelle_limine_config() {
 # =========================
 
 installiere_kernel_und_boottools() {
+  local packages=(
+    linux
+    linux-lts
+    linux-firmware
+    memtest86+-efi
+    limine
+  )
+
+  [[ -n "$MICROCODE_PKG" ]] && packages+=("$MICROCODE_PKG")
+
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Kernel und Boottools installieren:"
-    warn "  linux linux-lts linux-firmware memtest86+-efi limine"
+    warn "  ${packages[*]}"
     return 0
   fi
 
-  log "Installiere Kernel und Boottools..."
+  log "Installiere Kernel, Boottools und Microcode ($MICROCODE_PKG)..."
 
-  arch-chroot /mnt pacman -S --noconfirm \
-    linux \
-    linux-lts \
-    linux-firmware \
-    memtest86+-efi \
-    limine || {
+  arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
       error "Kernel/Boottools konnten nicht installiert werden."
       exit 1
   }

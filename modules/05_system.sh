@@ -170,14 +170,13 @@ EOF
 
 installiere_systemdienste() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Systemdienste und Microcode installieren:"
-    warn "  networkmanager avahi nss-mdns firewalld $MICROCODE_PKG"
+    warn "[DRY-RUN] würde Systemdienste installieren:"
+    warn "  networkmanager avahi nss-mdns firewalld"
     return 0
   fi
 
-  log "Installiere Systemdienste und Microcode ($MICROCODE_PKG)..."
+  log "Installiere Systemdienste..."
 
-  # Bash-Array für saubere Paketverwaltung (behebt SC2086)
   local packages=(
     networkmanager
     avahi
@@ -185,17 +184,11 @@ installiere_systemdienste() {
     firewalld
   )
 
-  # Microcode nur hinzufügen, wenn die Variable nicht leer ist
-  if [[ -n "$MICROCODE_PKG" ]]; then
-    packages+=("$MICROCODE_PKG")
-  fi
-
-  # Installation über die saubere Array-Expansion
   arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
-    error "Systemdienste oder Microcode konnten nicht installiert werden."
+    error "Systemdienste konnten nicht installiert werden."
     exit 1
   }
 
   arch-chroot /mnt systemctl enable NetworkManager avahi-daemon firewalld
-  success "Systemdienste und Microcode installiert und aktiviert."
+  success "Systemdienste installiert und aktiviert."
 }
