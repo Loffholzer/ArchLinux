@@ -115,8 +115,6 @@ main() {
   success "Fertig."
 }
 
-main "$@"
-
 # =========================
 # 🧹 Finales Hardening
 # =========================
@@ -128,3 +126,5 @@ run_final_hardening() {
     success "Temporäre Sudo-Rechte entfernt."
   fi
 }
+
+main "$@"

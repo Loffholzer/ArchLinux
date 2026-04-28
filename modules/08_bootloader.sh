@@ -333,8 +333,11 @@ schreibe_limine_config_datei() {
 timeout: 5
 remember_last_entry: yes
 graphics: yes
-wallpaper: boot():/limine/background.png
+wallpaper: boot():/limine/splash.jpg
 wallpaper_style: stretched
+TERM_FOREGROUND=ccffffff
+TERM_FOREGROUND_BRIGHT=ffffcc00
+TERM_BACKGROUND=00000000
 interface_branding: Arch Linux
 
 /Arch Linux

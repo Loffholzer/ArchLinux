@@ -50,6 +50,7 @@ zeige_shell_plan() {
   echo "User: $USERNAME"
   echo "Shell: fish"
   echo "Prompt: starship"
+  echo "Fonts: Nerd Fonts (JetBrains Mono, Symbols)"
   echo
 
   warn "Dieses Modul richtet eine komfortable Shell ein."
@@ -61,14 +62,25 @@ zeige_shell_plan() {
 # =========================
 
 installiere_shell_tools() {
+  local packages=(
+    fish
+    starship
+    eza
+    bat
+    bottom
+    ttf-jetbrains-mono-nerd
+    ttf-nerd-fonts-symbols
+  )
+
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde fish, starship und moderne CLI-Tools (eza, bat, bottom) installieren"
+    warn "[DRY-RUN] würde Shell-Tools und Nerd Fonts installieren:"
+    warn "  ${packages[*]}"
     return 0
   fi
 
-  log "Installiere fish, starship und moderne CLI-Tools..."
+  log "Installiere Shell-Tools und Nerd Fonts..."
 
-  arch-chroot /mnt pacman -S --noconfirm fish starship eza bat bottom || {
+  arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
     error "Shell-Tools konnten nicht installiert werden."
     exit 1
   }
