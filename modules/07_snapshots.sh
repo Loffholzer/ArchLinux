@@ -12,6 +12,10 @@
 # - BTRFS läuft (aus 03)
 # =========================================
 
+# =========================
+# 🚀 Snapshots Setup ausführen
+# =========================
+
 run_snapshot_setup() {
   header "07 - Snapshots"
 

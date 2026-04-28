@@ -12,6 +12,10 @@
 # - User existiert (08)
 # =========================================
 
+# =========================
+# 🚀 Shell Setup ausführen
+# =========================
+
 run_shell_setup() {
   header "11 - Shell"
 
@@ -68,8 +72,7 @@ installiere_shell_tools() {
     eza
     bat
     bottom
-    ttf-jetbrains-mono-nerd
-    ttf-nerd-fonts-symbols
+    nerd-fonts
   )
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
@@ -92,13 +95,14 @@ installiere_shell_tools() {
 
 setze_default_shell() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde fish als Default-Shell setzen"
+    warn "[DRY-RUN] würde fish als Default-Shell für $USERNAME und root setzen"
     return 0
   fi
 
-  log "Setze fish als Default-Shell..."
+  log "Setze fish als Default-Shell für User und Root..."
 
   arch-chroot /mnt chsh -s /usr/bin/fish "$USERNAME"
+  arch-chroot /mnt chsh -s /usr/bin/fish root
 }
 
 # =========================
@@ -135,33 +139,48 @@ konfiguriere_starship() {
 
 setze_aliases() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Aliase setzen (ls, ll, update, cat, top)"
+    warn "[DRY-RUN] würde config.fish für User und Root generieren"
     return 0
   fi
 
-  log "Setze Aliase..."
+  log "Generiere zentrale config.fish für User und Root..."
 
-  local fish_dir="/mnt/home/${USERNAME}/.config/fish"
-  local config_file="${fish_dir}/config.fish"
+  local fish_dir_user="/mnt/home/${USERNAME}/.config/fish"
+  local fish_dir_root="/mnt/root/.config/fish"
+  local config_file_user="${fish_dir_user}/config.fish"
+  local config_file_root="${fish_dir_root}/config.fish"
 
-  # Verzeichnisstruktur direkt über /mnt anlegen
-  mkdir -p "$fish_dir"
+  mkdir -p "$fish_dir_user" "$fish_dir_root"
 
-  # Konfiguration schreiben (idempotent)
-  if ! grep -qxF "alias ls='eza --icons --group-directories-first'" "$config_file" 2>/dev/null; then
-    cat << 'EOF' >> "$config_file"
+  # Monolithischer Block für saubere Idempotenz
+  cat << 'EOF' > "$config_file_user"
+# --- System Init ---
+set -g fish_greeting
+fastfetch
 
-# Custom Aliases
+# --- Prompt & Navigation ---
+starship init fish | source
+zoxide init fish | source
+
+# --- Professional Aliases ---
 alias ls='eza --icons --group-directories-first'
 alias ll='eza -la --icons --group-directories-first'
-alias cat='bat'
-alias top='btm'
+alias la='eza -laa --icons --group-directories-first'
+alias cat='bat --theme="Monokai Extended"'
+alias top='btop'
+alias cd='z'
 alias update='sudo pacman -Syu'
 EOF
-  fi
 
-  # Berechtigungen sauber auf den Zielbenutzer übertragen
+  # Konfiguration auf Root spiegeln
+  cp "$config_file_user" "$config_file_root" || {
+    error "Konnte config.fish nicht nach /root kopieren."
+    exit 1
+  }
+
+  # Rechte sauber auf den jeweiligen Besitzer anwenden
   arch-chroot /mnt chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}/.config"
+  arch-chroot /mnt chown -R "root:root" "/root/.config"
 
-  success "Aliase sicher gesetzt."
+  success "Shell-Environment für User und Root professionell eingerichtet."
 }

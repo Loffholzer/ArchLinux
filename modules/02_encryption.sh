@@ -42,6 +42,10 @@ run_encryption_setup() {
   success "Verschlüsselung vorbereitet."
 }
 
+# =========================
+# 🔒 Checks
+# =========================
+
 pruefe_encryption_variablen() {
   [[ -n "${ROOT_PART:-}" ]] || { error "ROOT_PART ist nicht gesetzt."; exit 1; }
   [[ -n "${USE_LUKS:-}" ]] || { error "USE_LUKS ist nicht gesetzt."; exit 1; }
@@ -50,6 +54,10 @@ pruefe_encryption_variablen() {
     [[ -b "$ROOT_PART" ]] || { error "$ROOT_PART ist kein gültiges Blockdevice."; exit 1; }
   fi
 }
+
+# =========================
+# 📋 Plan anzeigen
+# =========================
 
 zeige_luks_plan() {
   header "Geplanter LUKS-Aufbau"

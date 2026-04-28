@@ -699,10 +699,6 @@ confirm_config() {
 # 🔍 CPU-Microcode automatisch bestimmen
 # =========================
 
-# =========================
-# 🔍 CPU-Microcode automatisch bestimmen
-# =========================
-
 bestimme_microcode_paket() {
   local cpu_vendor
   cpu_vendor=$(grep -m1 'vendor_id' /proc/cpuinfo | awk '{print $3}')

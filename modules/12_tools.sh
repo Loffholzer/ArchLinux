@@ -10,6 +10,10 @@
 # - Basissystem ist installiert
 # =========================================
 
+# =========================
+# 🚀 Tools Setup ausführen
+# =========================
+
 run_tools_setup() {
   header "12 - CLI-Tools"
 
@@ -47,18 +51,26 @@ zeige_tools_plan() {
 # 📦 Installation
 # =========================
 
+# =========================================
+# ZU ERSETZEN IN: modules/12_tools.sh
+# =========================================
+
 installiere_tools() {
+  # htop und fastfetch entfernt (bereits in Modul 11)
+  # Moderne CLI-Standards (ripgrep, fd, jq) ergänzt
   local packages=(
     git
     curl
     wget
-    htop
-    fastfetch
     unzip
     zip
     man-db
     man-pages
     bash-completion
+    ripgrep
+    fd
+    jq
+    tealdeer
   )
 
   if [[ "${DRY_RUN:-true}" == true ]]; then

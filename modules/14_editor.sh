@@ -11,6 +11,10 @@
 # - System installiert (/mnt)
 # =========================================
 
+# =========================
+# 🚀 Editor Setup ausführen
+# =========================
+
 run_editor_setup() {
   header "14 - Editor"
 

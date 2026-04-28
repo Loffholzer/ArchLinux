@@ -11,6 +11,10 @@
 # - git/base-devel vorhanden oder installierbar
 # =========================================
 
+# =========================
+# 🚀 AUR Setup ausführen
+# =========================
+
 run_aur_setup() {
   header "13 - AUR"
 
@@ -20,6 +24,10 @@ run_aur_setup() {
 
   success "AUR vorbereitet."
 }
+
+# =========================
+# 🔒 Checks
+# =========================
 
 pruefe_aur_variablen() {
   [[ -n "${USERNAME:-}" ]] || { error "USERNAME fehlt."; exit 1; }
@@ -31,6 +39,10 @@ pruefe_aur_variablen() {
     }
   fi
 }
+
+# =========================
+# 📋 Plan anzeigen
+# =========================
 
 zeige_aur_plan() {
   header "Geplante AUR-Einrichtung"

@@ -30,6 +30,10 @@ run_disk_setup() {
   success "Laufwerk vorbereitet."
 }
 
+# =========================
+# 🔒 Checks
+# =========================
+
 pruefe_disk_variablen() {
   [[ -n "${DISK:-}" ]] || { error "DISK ist nicht gesetzt."; exit 1; }
   [[ -b "$DISK" ]] || { error "$DISK ist kein gültiges Blockdevice."; exit 1; }
@@ -41,6 +45,10 @@ pruefe_disk_variablen() {
     *) error "Unbekanntes Installationsprofil: $INSTALL_PROFILE"; exit 1 ;;
   esac
 }
+
+# =========================
+# 📋 Plan anzeigen
+# =========================
 
 zeige_disk_plan() {
   header "Geplanter Laufwerksaufbau"
@@ -87,6 +95,10 @@ bestaetige_disk_zerstoererisch() {
   }
 }
 
+# =========================
+# 💽 Partitionierung
+# =========================
+
 partitioniere_disk() {
   header "Partitionierung"
 
@@ -118,6 +130,10 @@ partitioniere_disk() {
   success "Partitionierung abgeschlossen."
 }
 
+# =========================
+# 🔍 Partitionen ermitteln
+# =========================
+
 ermittle_partitionen() {
   if [[ "$DISK" =~ nvme|mmcblk ]]; then
     EFI_PART="${DISK}p1"
@@ -141,6 +157,10 @@ ermittle_partitionen() {
   success "EFI-Partition: ${EFI_PART}"
   success "ROOT-Partition: ${ROOT_PART}"
 }
+
+# =========================
+# 🧹 EFI formatieren
+# =========================
 
 formatiere_efi() {
   header "EFI formatieren"

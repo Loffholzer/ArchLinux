@@ -12,11 +12,16 @@
 # - keine kritischen Änderungen
 # =========================================
 
+# =========================
+# 🚀 Performance Setup ausführen
+# =========================
+
 run_perf_setup() {
   header "06 - Performance"
 
   zeige_perf_plan
   optimiere_pacman
+  installiere_zram
 
   success "Performance-Optimierungen angewendet."
 }
@@ -77,4 +82,32 @@ optimiere_pacman() {
     }
 
   success "Pacman jetzt hübsch ✨"
+}
+
+# =========================
+# 💾 ZRAM (Swap)
+# =========================
+
+installiere_zram() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde zram-generator installieren und konfigurieren"
+    return 0
+  fi
+
+  log "Installiere und konfiguriere ZRAM (Swap im RAM)..."
+
+  arch-chroot /mnt pacman -S --noconfirm zram-generator || {
+    warn "Konnte zram-generator nicht installieren."
+    return 0
+  }
+
+  # Konfiguriert ZRAM auf max 50% des RAMs mit zstd Kompression
+  cat > /mnt/etc/systemd/zram-generator.conf << 'EOF'
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+swap-priority = 100
+EOF
+
+  success "ZRAM konfiguriert (aktiviert sich automatisch beim Boot)."
 }

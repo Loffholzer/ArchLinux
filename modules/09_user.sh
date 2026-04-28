@@ -13,6 +13,10 @@
 # - System ist installiert (/mnt)
 # =========================================
 
+# =========================
+# 🚀 Benutzer Setup ausführen
+# =========================
+
 run_user_setup() {
   header "09 - Benutzer"
 

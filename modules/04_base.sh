@@ -11,6 +11,10 @@
 # - /mnt ist gemountet (aus 03_btrfs.sh)
 # =========================================
 
+# =========================
+# 🚀 Basissystem Setup ausführen
+# =========================
+
 run_base_install() {
   header "04 - Basissystem"
 

@@ -24,6 +24,7 @@ run_snapshot_boot_setup() {
   zeige_snapshot_boot_plan
   finde_snapper_snapshots
   aktualisiere_limine_snapshot_block
+  installiere_snapshot_automatisierung
 
   success "Snapshot-Boot vorbereitet."
 }
@@ -66,47 +67,6 @@ zeige_snapshot_boot_plan() {
 
   warn "Snapshot-Boot wird vorbereitet, aber noch nicht vollständig aktiviert."
   echo
-}
-
-# =========================
-# 📸 Snapshot-Boot Platzhalter
-# =========================
-
-generiere_snapshot_entries() {
-  if [[ "${DRY_RUN:-true}" == true ]]; then
-    echo "/Snapshots"
-    echo "    comment: Snapshot-Boot wird später dynamisch generiert."
-    return 0
-  fi
-
-  local snapshot
-  local snapshot_id
-  local snapshot_date
-  local snapshot_cmdline
-  local found=false
-
-  echo "/Snapshots"
-
-  while IFS= read -r snapshot; do
-    snapshot_id="$(basename "$(dirname "$snapshot")")"
-
-    snapshot_date="Snapshot ${snapshot_id}"
-    if [[ -f "/mnt/.snapshots/${snapshot_id}/info.xml" ]]; then
-      snapshot_date="$(grep -oPm1 '(?<=<date>)[^<]+' "/mnt/.snapshots/${snapshot_id}/info.xml" 2>/dev/null || echo "Snapshot ${snapshot_id}")"
-    fi
-
-    snapshot_cmdline="$(baue_snapshot_cmdline "$snapshot_id")" || {
-      warn "CMDLINE für Snapshot ${snapshot_id} fehlgeschlagen, überspringe."
-      continue
-    }
-
-    found=true
-    schreibe_snapshot_entry "$snapshot_date" "$snapshot_id" "$snapshot_cmdline"
-  done < <(finde_snapper_snapshots)
-
-  if [[ "$found" == false ]]; then
-    echo "    comment: Keine bootfähigen Snapshots gefunden."
-  fi
 }
 
 # =========================
@@ -227,17 +187,14 @@ finde_snapper_snapshots() {
 generiere_snapshot_entries() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     echo "/Snapshots"
-    echo "    comment: Snapshot-Boot wird später dynamisch generiert."
+    echo "    //Info"
+    echo "        comment: Snapshot-Boot wird später dynamisch generiert."
     return 0
   fi
 
-  local snapshot
-  local snapshot_id
-  local snapshot_date
-  local snapshot_cmdline
+  local snapshot snapshot_id snapshot_date snapshot_cmdline
   local found=false
-
-  echo "/Snapshots"
+  local entries=""
 
   while IFS= read -r snapshot; do
     snapshot_id="$(basename "$(dirname "$snapshot")")"
@@ -253,14 +210,18 @@ generiere_snapshot_entries() {
     }
 
     found=true
-    schreibe_snapshot_entry "$snapshot_date" "$snapshot_id" "$snapshot_cmdline"
+    entries+=$(schreibe_snapshot_entry "$snapshot_date" "$snapshot_id" "$snapshot_cmdline")
+    entries+=$'\n'
   done < <(finde_snapper_snapshots)
 
+  echo "/Snapshots"
   if [[ "$found" == false ]]; then
-    echo "    comment: Keine bootfähigen Snapshots gefunden."
+    echo "    //Keine Snapshots"
+    echo "        comment: Aktuell keine bootfähigen Snapshots vorhanden."
+  else
+    echo -e "$entries"
   fi
 }
-
 
 # =========================
 # 🧠 Snapshot Kernel-CMDLINE bauen
@@ -317,18 +278,117 @@ schreibe_snapshot_entry() {
   [[ "$MICROCODE_PKG" == "intel-ucode" ]] && ucode_name="intel-ucode.img"
   [[ "$MICROCODE_PKG" == "amd-ucode" ]] && ucode_name="amd-ucode.img"
 
+  # Limine Syntax: // für Child-Nodes (Einträge im Untermenü)
   cat <<EOF
-//${snapshot_date}
-    protocol: linux
-    kernel_path: boot():/vmlinuz-linux
+    //${snapshot_date} (ID: ${snapshot_id})
+        protocol: linux
+        kernel_path: boot():/vmlinuz-linux
 EOF
 
   if [[ -n "$ucode_name" ]]; then
-    echo "    module_path: boot():/${ucode_name}"
+    echo "        module_path: boot():/${ucode_name}"
   fi
 
   cat <<EOF
-    module_path: boot():/initramfs-linux.img
-    cmdline: ${snapshot_cmdline}
+        module_path: boot():/initramfs-linux.img
+        cmdline: ${snapshot_cmdline}
 EOF
+}
+
+# =========================
+# 🔄 Snapshot-Automatisierung (Service & Script)
+# =========================
+
+installiere_snapshot_automatisierung() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde Snapshot-Automatisierung im Zielsystem installieren"
+    return 0
+  fi
+
+  log "Installiere Snapshot-Update-Skript und Systemd-Trigger..."
+
+  local update_script="/mnt/usr/local/bin/limine-snapper-update"
+
+  # 1. Das Update-Skript im Zielsystem erstellen
+  cat << 'EOF' > "$update_script"
+#!/usr/bin/env bash
+# Generiert Limine Snapshot-Einträge für die letzten 5 Snapshots
+
+CONFIG="/boot/limine.conf"
+SNAPSHOT_DIR="/.snapshots"
+MAX_SNAPSHOTS=5
+
+[[ -f "$CONFIG" ]] || exit 1
+
+# Finde Microcode
+UCODE=""
+[[ -f "/boot/intel-ucode.img" ]] && UCODE="boot():/intel-ucode.img"
+[[ -f "/boot/amd-ucode.img" ]] && UCODE="boot():/amd-ucode.img"
+
+# Extrahiere aktuelle Root-CMDLINE (ohne subvol)
+# Wir nehmen die CMDLINE vom Haupt-Arch-Eintrag und säubern sie
+BASE_CMDLINE=$(grep -m1 "cmdline:" "$CONFIG" | sed 's/.*cmdline: //' | sed 's/rootflags=subvol=[^ ]*//g')
+
+# Temporäre Datei für Einträge
+TMP_ENTRIES=$(mktemp)
+
+echo "/Snapshots" > "$TMP_ENTRIES"
+
+found=false
+for snap_dir in $(find "$SNAPSHOT_DIR" -maxdepth 1 -mindepth 1 -type d | sort -Vr | head -n "$MAX_SNAPSHOTS"); do
+    id=$(basename "$snap_dir")
+    [[ -f "$snap_dir/snapshot/etc/os-release" ]] || continue
+
+    date="Snapshot $id"
+    [[ -f "$snap_dir/info.xml" ]] && date=$(grep -oPm1 '(?<=<date>)[^<]+' "$snap_dir/info.xml")
+
+    echo "    //${date} (ID: ${id})" >> "$TMP_ENTRIES"
+    echo "        protocol: linux" >> "$TMP_ENTRIES"
+    echo "        kernel_path: boot():/vmlinuz-linux" >> "$TMP_ENTRIES"
+    [[ -n "$UCODE" ]] && echo "        module_path: ${UCODE}" >> "$TMP_ENTRIES"
+    echo "        module_path: boot():/initramfs-linux.img" >> "$TMP_ENTRIES"
+    echo "        cmdline: ${BASE_CMDLINE} rootflags=subvol=@snapshots/${id}/snapshot ro" >> "$TMP_ENTRIES"
+    found=true
+done
+
+[[ "$found" == "false" ]] && echo "    //Keine Snapshots gefunden" >> "$TMP_ENTRIES"
+
+# In limine.conf einfügen (Logik analog zum Installer)
+awk -v entries_file="$TMP_ENTRIES" '
+    /^#\+SNAPSHOT_ENTRIES_BEGIN$/ { print; while ((getline line < entries_file) > 0) { print line } close(entries_file); skip=1; next }
+    /^#\+SNAPSHOT_ENTRIES_END$/ { skip=0; print; next }
+    skip != 1 { print }
+' "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+
+rm -f "$TMP_ENTRIES"
+EOF
+
+  chmod +x "$update_script"
+
+  # 2. Systemd Service erstellen
+  cat << EOF > /mnt/etc/systemd/system/limine-snapper-update.service
+[Unit]
+Description=Update Limine boot entries for Snapper snapshots
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=$update_script
+EOF
+
+  # 3. Systemd Path Unit erstellen (Überwacht den Snapshot-Ordner)
+  cat << EOF > /mnt/etc/systemd/system/limine-snapper-update.path
+[Unit]
+Description=Monitor Snapper snapshots for Limine update
+
+[Path]
+PathChanged=/.snapshots
+Unit=limine-snapper-update.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  # 4. Trigger aktivieren
+  arch-chroot /mnt systemctl enable limine-snapper-update.path
 }

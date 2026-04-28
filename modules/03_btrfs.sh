@@ -58,7 +58,11 @@ setze_btrfs_optionen() {
   BTRFS_OPTS="noatime,compress=zstd,space_cache=v2"
 
   if is_ssd; then
-    BTRFS_OPTS+=",ssd"
+    # discard=async hinzugefügt (Standard Best-Practice für BTRFS auf SSDs)
+    BTRFS_OPTS+=",ssd,discard=async"
+    log "SSD erkannt. BTRFS-Optionen auf SSD-Performance optimiert."
+  else
+    log "HDD erkannt (oder ROTA-Check fehlgeschlagen). Nutze Standard-Optionen."
   fi
 
   export BTRFS_OPTS

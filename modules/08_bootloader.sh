@@ -32,6 +32,10 @@ run_bootloader_setup() {
   success "Bootloader eingerichtet."
 }
 
+# =========================
+# 🔒 Checks
+# =========================
+
 pruefe_bootloader_variablen() {
   [[ -n "${EFI_PART:-}" ]] || { error "EFI_PART fehlt."; exit 1; }
   [[ -n "${ROOT_DEVICE:-}" ]] || { error "ROOT_DEVICE fehlt."; exit 1; }
@@ -70,6 +74,10 @@ zeige_bootloader_plan() {
   echo
 }
 
+# =========================
+# 📂 EFI Mounten
+# =========================
+
 mounte_efi() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde EFI nach /mnt/boot mounten"
@@ -100,13 +108,16 @@ mounte_efi() {
 installiere_limine_efi() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Limine EFI-Dateien installieren (inkl. Fallback BOOTX64.EFI)"
+    warn "[DRY-RUN] würde splash.jpg nach /mnt/boot/limine/ kopieren"
     return 0
   fi
 
   log "Installiere Limine EFI-Dateien..."
 
   local boot_dir="/mnt/boot/EFI/BOOT"
+  local limine_dir="/mnt/boot/limine"
   local limine_src="/mnt/usr/share/limine/BOOTX64.EFI"
+  local splash_src="${SCRIPT_DIR}/splash.jpg"
 
   [[ -f "$limine_src" ]] || {
     error "Limine EFI-Datei nicht gefunden: $limine_src"
@@ -114,11 +125,20 @@ installiere_limine_efi() {
   }
 
   mkdir -p "$boot_dir"
+  mkdir -p "$limine_dir"
 
   cp "$limine_src" "${boot_dir}/BOOTX64.EFI" || {
     error "Limine BOOTX64.EFI konnte nicht kopiert werden."
     exit 1
   }
+
+  # Splash-Bild kopieren
+  if [[ -f "$splash_src" ]]; then
+    cp "$splash_src" "${limine_dir}/splash.jpg" || warn "Konnte splash.jpg nicht kopieren."
+    success "Limine Splash-Image installiert."
+  else
+    warn "splash.jpg nicht gefunden in: $splash_src"
+  fi
 
   success "Limine EFI installiert: /boot/EFI/BOOT/BOOTX64.EFI"
 }
