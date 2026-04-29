@@ -1,0 +1,87 @@
+1. Hauptblock: KDE Plasma & System-Features
+
+Dieser Block enthält den Desktop, Audio, Bluetooth, Druck-Support, Codecs und die wichtigsten System-Tools.
+Bash
+
+sudo pacman -S --needed \
+plasma-desktop sddm bluedevil \
+dolphin konsole ark spectacle gwenview \
+kcalc okular kate haruna \
+kinfocenter isoimagewriter partitionmanager \
+pipewire lib32-pipewire wireplumber pipewire-audio pipewire-pulse pipewire-alsa \
+bluez bluez-utils \
+cups cups-filters system-config-printer \
+hunspell hunspell-de hyphen-de libmythes mythes-de \
+ffmpegthumbs kdegraphics-thumbnailers \
+gst-libav gst-plugins-good gst-plugins-bad gst-plugins-ugly \
+flatpak discover packagekit-qt6 \
+xdg-desktop-portal-kde kio-admin power-profiles-daemon \
+steam gamemode lib32-gamemode \
+vulkan-tools clinfo btrfs-assistant \
+sane airscan skanpage
+
+2. Hauptblock: Deine Anwendungen
+
+Internet, Office, Grafik und Konstruktion (alle offiziellen Pakete).
+Bash
+
+sudo pacman -S --needed \
+firefox firefox-i18n-de \
+thunderbird thunderbird-i18n-de \
+libreoffice-fresh libreoffice-fresh-de \
+gimp inkscape freecad bitwarden \
+yubioath-desktop
+
+3. Hardware-Ergänzung (Nur für AMD)
+
+Vervollständigt deine Grafik-Power für 32-Bit-Anwendungen und Steam.
+Bash
+
+sudo pacman -S --needed lib32-vulkan-radeon lib32-mesa
+
+4. AUR-Block (Via Paru)
+
+Hier kommen die Pakete rein, die nicht in den offiziellen Quellen sind, sowie das mächtige AMD-Tool.
+Bash
+
+# OrcaSlicer und das AMD-Kontrollzentrum
+paru -S --needed orcaslicer-bin corectrl
+
+    Tipp zu CoreCtrl: Damit es deine GPU voll steuern kann, füge später amdgpu.ppfeaturemask=0xffffffff zu deinen Boot-Parametern hinzu.
+
+5. Einrichtung & Dienste (Finalisierung)
+
+Diesen Block zum Schluss ausführen, um alles scharf zu schalten.
+Bash
+
+# Dienste aktivieren
+sudo systemctl enable sddm
+sudo systemctl enable --now bluetooth
+sudo systemctl enable --now cups
+sudo systemctl enable --now power-profiles-daemon
+sudo systemctl enable --now avahi-daemon
+
+# Bluetooth Auto-On beim Boot
+sudo sed -i 's/#AutoEnable=false/AutoEnable=true/' /etc/bluetooth/main.conf
+
+# Firewall für Epson ET-4850 & mDNS
+sudo firewall-cmd --permanent --zone=home --add-service=mdns
+sudo firewall-cmd --permanent --zone=home --add-service=ipp
+sudo firewall-cmd --permanent --zone=home --add-service=ipp-client
+sudo firewall-cmd --reload
+
+Kurze Anleitung für die Browser-Addons:
+
+Da Addons nicht via Pacman installiert werden, öffne Firefox und besuche diese Links für deine gewünschten Erweiterungen:
+
+    uBlock Origin: Link
+
+    Dark Reader: Link
+
+    I still don't care about cookies: Link
+
+    Bitwarden: Link
+
+Brave Search: Gehe in Firefox auf brave.com/search, mache einen Rechtsklick in die Adressleiste und wähle "Suchmaschine hinzufügen".
+
+Damit ist dein Arch Linux "Battle-Station" Setup komplett. Viel Spaß beim Installieren!
