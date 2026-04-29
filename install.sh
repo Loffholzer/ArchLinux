@@ -419,45 +419,22 @@ preflight_checks() {
 }
 
 # =========================================
-# ⚙️ Runtime-Flags auswerten
+# ⚙️ Runtime-Modus setzen
 # -----------------------------------------
-# Erzwingt sicheren Standardmodus
-# → echte Ausführung nur mit explizitem --execute
+# Nutzt DRY_RUN aus install.sh als feste Vorgabe
+# → finaler Installer läuft ohne Parameter produktiv
 # =========================================
 
 parse_runtime_flags() {
-  DRY_RUN=true
   AUTO_MODE=false
-  ALLOW_EXEC=false
 
-  local arg
-
-  for arg in "$@"; do
-    case "$arg" in
-      --dry-run)
-        DRY_RUN=true
-        ALLOW_EXEC=false
-        ;;
-      --execute)
-        DRY_RUN=false
-        ;;
-      --auto)
-        AUTO_MODE=true
-        ;;
-      *)
-        error "Unbekannter Parameter: $arg"
-        error "Erlaubt: --dry-run, --execute, --auto"
-        exit 1
-        ;;
-    esac
-  done
-
-  if [[ "$AUTO_MODE" == true && "$DRY_RUN" != true ]]; then
-    error "AUTO_MODE darf niemals mit echter Ausführung laufen."
+  if [[ "$#" -gt 0 ]]; then
+    error "Parameter werden nicht unterstützt."
+    error "DRY_RUN wird direkt in install.sh gesetzt."
     exit 1
   fi
 
-  if [[ "$DRY_RUN" == true ]]; then
+  if [[ "${DRY_RUN:-false}" == true ]]; then
     ALLOW_EXEC=false
   else
     ALLOW_EXEC=true
