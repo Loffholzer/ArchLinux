@@ -211,7 +211,7 @@ validate_mount_source() {
   local actual_source
   actual_source="$(findmnt -n -o SOURCE "$mountpoint_path")"
 
-  [[ "$actual_source" == "$expected_source" ]] || {
+  [[ "$actual_source" == "$expected_source" || "$actual_source" == "$expected_source["* ]] || {
     error "$mountpoint_path ist falsch gemountet: $actual_source statt $expected_source"
     exit 1
   }
@@ -231,7 +231,7 @@ validate_btrfs_subvol() {
   local options
   options="$(findmnt -n -o OPTIONS "$mountpoint_path")"
 
-  [[ "$options" == *"subvol=${expected_subvol}"* ]] || {
+  [[ "$options" == *"subvol=${expected_subvol}"* || "$options" == *"subvol=/${expected_subvol}"* ]] || {
     error "$mountpoint_path ist nicht mit subvol=${expected_subvol} gemountet."
     exit 1
   }

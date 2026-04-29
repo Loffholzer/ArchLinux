@@ -101,14 +101,15 @@ validiere_mnt_konsistenz() {
 
   guard_mnt_mounted
 
-  # Root muss BTRFS sein
   findmnt -n -o FSTYPE /mnt | grep -qx "btrfs" || {
     error "/mnt ist kein BTRFS → falscher Installationszustand"
     exit 1
   }
 
-  # Subvol @ muss aktiv sein
-  findmnt -n -o OPTIONS /mnt | grep -q "subvol=@" || {
+  local options
+  options="$(findmnt -n -o OPTIONS /mnt)"
+
+  [[ "$options" == *"subvol=@"* || "$options" == *"subvol=/@"* ]] || {
     error "/mnt ist nicht auf Subvolume @ gemountet"
     exit 1
   }

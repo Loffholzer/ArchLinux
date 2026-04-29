@@ -191,17 +191,10 @@ bestaetige_disk_zerstoererisch() {
   echo -e "${NC}"
 
   local confirm_disk
-  local confirm_phrase
 
   read -rp "$(echo -e "${BLUE}[INPUT]${NC} Tippe exakt '${DISK}' ein: ")" confirm_disk
   [[ "$confirm_disk" == "$DISK" ]] || {
     error "Device-Bestätigung falsch. Abbruch."
-    exit 1
-  }
-
-  read -rp "$(echo -e "${BLUE}[INPUT]${NC} Tippe exakt 'ALLE DATEN LÖSCHEN': ")" confirm_phrase
-  [[ "$confirm_phrase" == "ALLE DATEN LÖSCHEN" ]] || {
-    error "Löschbestätigung falsch. Abbruch."
     exit 1
   }
 }

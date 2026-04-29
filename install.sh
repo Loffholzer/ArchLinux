@@ -180,7 +180,7 @@ safe_umount() {
 
   local expected
   for expected in "${expected_sources[@]}"; do
-    if [[ "$actual_source" == "$expected" ]]; then
+    if [[ "$actual_source" == "$expected" || "$actual_source" == "$expected["* ]]; then
       umount "$target" || warn "Konnte $target nicht unmounten."
       return 0
     fi
