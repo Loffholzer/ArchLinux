@@ -1,19 +1,29 @@
 #!/usr/bin/env bash
-
 # =========================================
-# 12_tools.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
-# Aufgabe:
-# - installiert essenzielle und moderne CLI-Tools
-# - ergänzt Such- und Analyse-Werkzeuge
+# Name:      12_tools.sh
+# Zweck:     CLI Toolset
 #
-# Voraussetzung:
-# - Basissystem ist installiert
+# Aufgabe:
+# - installiert Standardtools
+#
+# Wichtig:
+# - optional, aber reproduzierbar
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. feste Paketliste
+# 2. keine interaktiven Prompts
 # =========================================
 
-# =========================
-# 🚀 Tools Setup ausführen
-# =========================
+
+# =========================================
+# 🧰 CLI-Tools Setup orchestrieren
+# -----------------------------------------
+# Steuert Installation und Vorbereitung
+# moderner Kommandozeilen-Tools
+# =========================================
 run_tools_setup() {
   header "12 - CLI-Tools"
 
@@ -23,9 +33,12 @@ run_tools_setup() {
   success "CLI-Tools vollständig installiert."
 }
 
-# =========================
-# 📋 Plan anzeigen
-# =========================
+# =========================================
+# 📋 CLI-Toolset anzeigen
+# -----------------------------------------
+# Zeigt geplante Tools nach Kategorien
+# für Transparenz vor Installation
+# =========================================
 zeige_tools_plan() {
   header "Geplante CLI-Tools"
 
@@ -45,9 +58,12 @@ zeige_tools_plan() {
   echo
 }
 
-# =========================
-# 📦 Installation
-# =========================
+# =========================================
+# 📦 CLI-Tools installieren
+# -----------------------------------------
+# Installiert definiertes Toolset und
+# initialisiert optionale Datenbanken
+# =========================================
 installiere_tools() {
   # htop/fastfetch entfernt (in Modul 11)
   # Wichtig: fzf hinzugefügt (essentiell für Fish/Zoxide Integration)

@@ -1,21 +1,31 @@
 #!/usr/bin/env bash
-
 # =========================================
-# 06_perf.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
+# Name:      06_perf.sh
+# Zweck:     Performance-Tuning
+#
 # Aufgabe:
 # - optimiert pacman
-# - aktiviert ParallelDownloads
-# - optional: kleine System-Tweaks
+# - optional ZRAM konfigurieren
 #
 # Wichtig:
-# - keine kritischen Änderungen
+# - keine kritischen Systemeingriffe
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. Nur optionale Optimierungen
+# 2. Keine Systeminstabilität riskieren
+# 3. idempotent bleiben
 # =========================================
 
-# =========================
-# 🚀 Performance Setup ausführen
-# =========================
 
+# =========================================
+# ⚡ Performance-Setup orchestrieren
+# -----------------------------------------
+# Steuert Pacman-Optimierungen und
+# optionale ZRAM-Konfiguration
+# =========================================
 run_perf_setup() {
   header "06 - Performance"
 
@@ -26,10 +36,12 @@ run_perf_setup() {
   success "Performance-Optimierungen angewendet."
 }
 
-# =========================
-# 📋 Plan anzeigen
-# =========================
-
+# =========================================
+# 📋 Performance-Optimierungen anzeigen
+# -----------------------------------------
+# Zeigt geplante Pacman- und
+# System-Tweaks vor Anwendung
+# =========================================
 zeige_perf_plan() {
   header "Geplante Optimierungen"
 
@@ -43,10 +55,12 @@ zeige_perf_plan() {
   echo
 }
 
-# =========================
-# ⚙ Pacman
-# =========================
-
+# =========================================
+# ⚙️ Pacman konfigurieren
+# -----------------------------------------
+# Aktiviert ParallelDownloads, Farbe
+# und zusätzliche Pacman-UX-Optionen
+# =========================================
 optimiere_pacman() {
   local pacman_conf="/mnt/etc/pacman.conf"
 
@@ -84,10 +98,12 @@ optimiere_pacman() {
   success "Pacman jetzt hübsch ✨"
 }
 
-# =========================
-# 💾 ZRAM (Swap)
-# =========================
-
+# =========================================
+# 💾 ZRAM konfigurieren
+# -----------------------------------------
+# Installiert zram-generator und richtet
+# komprimierten RAM-Swap ein
+# =========================================
 installiere_zram() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde zram-generator installieren und konfigurieren"

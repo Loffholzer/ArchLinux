@@ -1,21 +1,32 @@
 #!/usr/bin/env bash
 
 # =========================================
-# 08_bootloader.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
+# Name:      08_bootloader.sh
+# Zweck:     Bootchain Einrichtung (Limine)
+#
 # Aufgabe:
-# - installiert Limine
+# - installiert Kernel + Firmware
+# - erstellt initramfs
 # - richtet EFI Boot ein
-# - erstellt minimale limine.conf
+# - schreibt limine.conf
 #
 # Wichtig:
-# - kein Snapshot-Bootmenü
-# - Snapshot-Integration folgt später separat
+# - Fehler hier = System bootet NICHT
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. UUIDs IMMER validieren
+# 2. EFI Mount strikt prüfen
+# 3. initramfs MUSS erfolgreich sein
+# 4. Boot-Konfig deterministisch erzeugen
 # =========================================
 
-# =========================
-# 🚀 Bootloader Setup ausführen
-# =========================
+
+# =========================================
+# 🚀 Bootloader Setup orchestrieren
+# =========================================
 
 run_bootloader_setup() {
   header "08 - Bootloader (Limine)"
@@ -24,33 +35,37 @@ run_bootloader_setup() {
   zeige_bootloader_plan
   mounte_efi
   installiere_kernel_und_boottools
-  pruefe_memtest
   konfiguriere_vconsole_fuer_initramfs
   konfiguriere_mkinitcpio
+  baue_initramfs
   installiere_limine_efi
+  pruefe_memtest
   erstelle_limine_config
+  validiere_boot_setup
 
   success "Bootloader eingerichtet."
 }
 
-# =========================
-# 🔒 Checks
-# =========================
+
+# =========================================
+# 🔒 Variablen validieren
+# =========================================
 
 pruefe_bootloader_variablen() {
-  [[ -n "${EFI_PART:-}" ]] || { error "EFI_PART fehlt."; exit 1; }
-  [[ -n "${ROOT_DEVICE:-}" ]] || { error "ROOT_DEVICE fehlt."; exit 1; }
+  guard_require_var EFI_PART
+  guard_require_var ROOT_DEVICE
 
   if [[ "${DRY_RUN:-true}" != true ]]; then
-    [[ -b "$EFI_PART" ]] || { error "$EFI_PART ist kein Blockdevice."; exit 1; }
-    [[ -b "$ROOT_DEVICE" ]] || { error "$ROOT_DEVICE ist kein Blockdevice."; exit 1; }
-    mountpoint -q /mnt || { error "/mnt ist nicht gemountet."; exit 1; }
+    guard_block_device "$EFI_PART"
+    guard_block_device "$ROOT_DEVICE"
+    guard_mnt_mounted
   fi
 }
 
-# =========================
+
+# =========================================
 # 📋 Plan anzeigen
-# =========================
+# =========================================
 
 zeige_bootloader_plan() {
   header "Geplanter Bootloader"
@@ -60,24 +75,15 @@ zeige_bootloader_plan() {
   echo "Root-Gerät:    $ROOT_DEVICE"
   echo "Mountpoint:    /boot"
   echo
-  echo "Boot-Menü:"
-  echo "  - Arch Linux"
-  echo "  - Arch Linux LTS"
-  echo "  - Memtest86+"
-  echo "  - Snapshots (Platzhalter)"
-  echo
-  echo "Design:"
-  echo "  - Hintergrundbild später: /boot/limine/background.png"
-  echo
 
-  warn "Dieses Modul richtet die vollständige Bootchain ein."
-  warn "Snapshot-Boot-Einträge werden später durch Modul 10 generiert."
+  warn "Bootchain wird vollständig eingerichtet."
   echo
 }
 
-# =========================
-# 📂 EFI Mounten
-# =========================
+
+# =========================================
+# 📂 EFI mounten (hart validiert)
+# =========================================
 
 mounte_efi() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
@@ -85,175 +91,57 @@ mounte_efi() {
     return 0
   fi
 
-  if mountpoint -q /mnt/boot; then
-    log "/mnt/boot ist bereits gemountet, überspringe."
-    return 0
-  fi
-
-  log "Mounte EFI-Partition..."
-
   mkdir -p /mnt/boot
 
-  mount "$EFI_PART" /mnt/boot || {
-    error "EFI-Partition konnte nicht gemountet werden."
-    exit 1
-  }
-
-  success "EFI gemountet: /mnt/boot"
-}
-
-# =========================
-# 💾 Limine EFI-Dateien installieren
-# =========================
-
-installiere_limine_efi() {
-  if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Limine EFI-Dateien installieren (inkl. Fallback BOOTX64.EFI)"
-    warn "[DRY-RUN] würde splash.jpg nach /mnt/boot/limine/ kopieren"
+  if mountpoint -q /mnt/boot; then
+    guard_mountpoint_source /mnt/boot "$EFI_PART"
+    warn "/mnt/boot bereits korrekt gemountet."
     return 0
   fi
 
-  log "Installiere Limine EFI-Dateien..."
+  run_cmd mount "$EFI_PART" /mnt/boot
 
-  local boot_dir="/mnt/boot/EFI/BOOT"
-  local limine_dir="/mnt/boot/limine"
-  local limine_src="/mnt/usr/share/limine/BOOTX64.EFI"
-  local splash_src="${SCRIPT_DIR}/splash.jpg"
+  guard_mountpoint_source /mnt/boot "$EFI_PART"
 
-  [[ -f "$limine_src" ]] || {
-    error "Limine EFI-Datei nicht gefunden: $limine_src"
-    exit 1
-  }
-
-  mkdir -p "$boot_dir"
-  mkdir -p "$limine_dir"
-
-  cp "$limine_src" "${boot_dir}/BOOTX64.EFI" || {
-    error "Limine BOOTX64.EFI konnte nicht kopiert werden."
-    exit 1
-  }
-
-  # Splash-Bild kopieren
-  if [[ -f "$splash_src" ]]; then
-    cp "$splash_src" "${limine_dir}/splash.jpg" || warn "Konnte splash.jpg nicht kopieren."
-    success "Limine Splash-Image installiert."
-  else
-    warn "splash.jpg nicht gefunden in: $splash_src"
-  fi
-
-  success "Limine EFI installiert: /boot/EFI/BOOT/BOOTX64.EFI"
+  success "EFI gemountet."
 }
 
-# =========================
-# 📝 Limine-Konfiguration erstellen
-# =========================
 
-erstelle_limine_config() {
-  if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde limine.conf erstellen"
-    return 0
-  fi
-
-  local root_uuid
-  local cmdline
-
-  root_uuid="$(blkid -s UUID -o value "$ROOT_DEVICE" 2>/dev/null || true)"
-
-  [[ -n "$root_uuid" ]] || {
-    error "UUID für ROOT_DEVICE konnte nicht ermittelt werden."
-    exit 1
-  }
-
-  if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
-    local crypt_uuid
-
-    crypt_uuid="$(blkid -s UUID -o value "$ROOT_BASE_DEVICE" 2>/dev/null || true)"
-
-    [[ -n "$crypt_uuid" ]] || {
-      error "UUID für ROOT_BASE_DEVICE konnte nicht ermittelt werden."
-      exit 1
-    }
-
-    cmdline="cryptdevice=UUID=${crypt_uuid}:${ROOT_MAPPER_NAME} root=/dev/mapper/${ROOT_MAPPER_NAME} rootflags=subvol=@ rw"
-  else
-    cmdline="root=UUID=${root_uuid} rootflags=subvol=@ rw"
-  fi
-
-  mkdir -p /mnt/boot/limine
-
-  schreibe_limine_config_datei "$cmdline"
-
-  success "limine.conf erstellt."
-}
-
-# =========================
-# 📦 Kernel & Boottools installieren
-# =========================
+# =========================================
+# 📦 Kernel + Boottools installieren
+# =========================================
 
 installiere_kernel_und_boottools() {
   local packages=(
     linux
     linux-lts
     linux-firmware
-    memtest86+-efi
     limine
-    terminus-font
+    memtest86+-efi
   )
 
   [[ -n "$MICROCODE_PKG" ]] && packages+=("$MICROCODE_PKG")
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Kernel, Boottools und Konsolen-Font installieren:"
-    warn "  ${packages[*]}"
+    warn "[DRY-RUN] würde installieren: ${packages[*]}"
     return 0
   fi
 
-  log "Installiere Kernel, Boottools, Konsolen-Font und Microcode ($MICROCODE_PKG)..."
-
-  arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
-      error "Kernel/Boottools konnten nicht installiert werden."
-      exit 1
-  }
-
-  success "Kernel, Boottools und Konsolen-Font installiert."
+  run_cmd arch-chroot /mnt pacman -S --noconfirm "${packages[@]}"
 }
 
-# =========================
-# ⚙️ initramfs erstellen
-# =========================
 
-baue_initramfs() {
-  if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde mkinitcpio -P ausführen"
-    return 0
-  fi
-
-  log "Erstelle initramfs..."
-
-  arch-chroot /mnt mkinitcpio -P || {
-    error "mkinitcpio fehlgeschlagen."
-    exit 1
-  }
-
-  success "initramfs erstellt."
-}
-
-# =========================
-# 🖥️ TTY / Konsolen-Font (initramfs)
-# =========================
+# =========================================
+# ⚙️ initramfs vorbereiten (vconsole)
+# =========================================
 
 konfiguriere_vconsole_fuer_initramfs() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde vconsole vor initramfs setzen: KEYMAP=${KEYMAP}, FONT=${CONSOLE_FONT:-standard}"
+    warn "[DRY-RUN] würde vconsole setzen"
     return 0
   fi
 
-  [[ -n "${KEYMAP:-}" ]] || {
-    error "KEYMAP fehlt."
-    exit 1
-  }
-
-  log "Setze vconsole vor initramfs-Erstellung..."
+  guard_require_var KEYMAP
 
   cat > /mnt/etc/vconsole.conf <<EOF
 KEYMAP=${KEYMAP}
@@ -261,137 +149,145 @@ FONT=${CONSOLE_FONT:-ter-v28n}
 EOF
 }
 
-# =========================
-# ⚙️ mkinitcpio konfigurieren
-# =========================
+
+# =========================================
+# ⚙️ mkinitcpio HOOKS setzen
+# =========================================
 
 konfiguriere_mkinitcpio() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde mkinitcpio HOOKS konfigurieren"
-
-    if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
-      warn "[DRY-RUN] LUKS erkannt: HOOKS mit encrypt und consolefont"
-    else
-      warn "[DRY-RUN] Kein LUKS erkannt: HOOKS mit consolefont"
-    fi
-
+    warn "[DRY-RUN] würde mkinitcpio konfigurieren"
     return 0
   fi
 
   local conf="/mnt/etc/mkinitcpio.conf"
 
-  [[ -f "$conf" ]] || {
-    error "mkinitcpio.conf nicht gefunden: $conf"
+  guard_require_var ROOT_DEVICE
+
+  if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap consolefont encrypt filesystems fsck)/' "$conf"
+  else
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap consolefont filesystems fsck)/' "$conf"
+  fi
+}
+
+
+# =========================================
+# 💥 initramfs bauen (CRITICAL)
+# =========================================
+
+baue_initramfs() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde mkinitcpio -P ausführen"
+    return 0
+  fi
+
+  run_cmd arch-chroot /mnt mkinitcpio -P
+
+  # HARTE VALIDIERUNG
+  [[ -f /mnt/boot/initramfs-linux.img ]] || {
+    error "initramfs fehlt → System nicht bootfähig"
+    exit 1
+  }
+}
+
+
+# =========================================
+# 💾 Limine EFI installieren
+# =========================================
+
+installiere_limine_efi() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde Limine installieren"
+    return 0
+  fi
+
+  local src="/mnt/usr/share/limine/BOOTX64.EFI"
+  local target="/mnt/boot/EFI/BOOT/BOOTX64.EFI"
+
+  [[ -f "$src" ]] || {
+    error "Limine EFI nicht gefunden"
     exit 1
   }
 
-  log "Konfiguriere mkinitcpio HOOKS..."
+  mkdir -p "$(dirname "$target")"
 
-  if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap consolefont encrypt filesystems fsck)/' "$conf" || {
-      error "mkinitcpio HOOKS konnten nicht gesetzt werden."
-      exit 1
-    }
-  else
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap consolefont filesystems fsck)/' "$conf" || {
-      error "mkinitcpio HOOKS konnten nicht gesetzt werden."
-      exit 1
-    }
-  fi
-
-  success "mkinitcpio HOOKS konfiguriert."
+  run_cmd cp "$src" "$target"
 }
 
-# =========================
-# 🧠 Memtest prüfen
-# =========================
+
+# =========================================
+# 🔍 Memtest erkennen
+# =========================================
 
 pruefe_memtest() {
   MEMTEST_PATH=""
 
-  local paths=(
-    "/mnt/boot/memtest86+/memtest.efi"
-    "/mnt/boot/EFI/memtest86+/memtest.efi"
-    "/mnt/boot/EFI/tools/memtest86+/memtest.efi"
-    "/mnt/usr/lib/memtest86+/memtest.efi"
-    "/mnt/usr/share/memtest86+/memtest.efi"
-  )
-
-  local path
-
-  for path in "${paths[@]}"; do
-    if [[ -f "$path" ]]; then
-      MEMTEST_PATH="${path#/mnt}"
-      export MEMTEST_PATH
-      success "Memtest gefunden: ${MEMTEST_PATH}"
-      return 0
-    fi
-  done
-
   local found
-  found="$(find /mnt -type f -iname "memtest*.efi" 2>/dev/null | head -n1 || true)"
+  found="$(find /mnt -iname "memtest*.efi" 2>/dev/null | head -n1 || true)"
 
-  if [[ -n "$found" ]]; then
-    MEMTEST_PATH="${found#/mnt}"
-    export MEMTEST_PATH
-    success "Memtest gefunden (Fallback): ${MEMTEST_PATH}"
+  [[ -n "$found" ]] && MEMTEST_PATH="${found#/mnt}"
+
+  export MEMTEST_PATH
+}
+
+
+# =========================================
+# 🧠 Kernel CMDLINE bauen
+# =========================================
+
+build_cmdline() {
+  local root_uuid
+  root_uuid="$(blkid -s UUID -o value "$ROOT_DEVICE")"
+
+  [[ -n "$root_uuid" ]] || {
+    error "ROOT UUID fehlt"
+    exit 1
+  }
+
+  if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
+    local crypt_uuid
+    crypt_uuid="$(blkid -s UUID -o value "$ROOT_BASE_DEVICE")"
+
+    echo "cryptdevice=UUID=${crypt_uuid}:${ROOT_MAPPER_NAME} root=/dev/mapper/${ROOT_MAPPER_NAME} rootflags=subvol=@ rw"
+  else
+    echo "root=UUID=${root_uuid} rootflags=subvol=@ rw"
+  fi
+}
+
+
+# =========================================
+# 📝 limine.conf erstellen
+# =========================================
+
+erstelle_limine_config() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde limine.conf erstellen"
     return 0
   fi
 
-  warn "Memtest nicht gefunden. Eintrag wird übersprungen."
-  export MEMTEST_PATH
-  return 0
-}
+  local cmdline
+  cmdline="$(build_cmdline)"
 
-# =========================
-# 📝 Limine-Konfiguration schreiben
-# =========================
-
-schreibe_limine_config_datei() {
-  local cmdline="$1"
-  local ucode_img=""
-
-  [[ "$MICROCODE_PKG" == "intel-ucode" ]] && ucode_img="boot():/intel-ucode.img"
-  [[ "$MICROCODE_PKG" == "amd-ucode" ]] && ucode_img="boot():/amd-ucode.img"
+  mkdir -p /mnt/boot/limine
 
   cat > /mnt/boot/limine.conf <<EOF
-
 timeout: 5
-remember_last_entry: yes
-graphics: yes
-wallpaper: boot():/limine/splash.jpg
-wallpaper_style: stretched
-
-term_foreground: ffffff
-term_foreground_bright: ffcc00
-term_background: 00000000
-
-interface_branding: Arch Linux
 
 /Arch Linux
     protocol: linux
     kernel_path: boot():/vmlinuz-linux
-EOF
-
-  [[ -n "$ucode_img" ]] && echo "    module_path: ${ucode_img}" >> /mnt/boot/limine.conf
-
-  cat >> /mnt/boot/limine.conf <<EOF
     module_path: boot():/initramfs-linux.img
     cmdline: ${cmdline}
 
 /Arch Linux LTS
     protocol: linux
     kernel_path: boot():/vmlinuz-linux-lts
-EOF
-
-  [[ -n "$ucode_img" ]] && echo "    module_path: ${ucode_img}" >> /mnt/boot/limine.conf
-
-  cat >> /mnt/boot/limine.conf <<EOF
     module_path: boot():/initramfs-linux-lts.img
     cmdline: ${cmdline}
 EOF
 
-  if [[ -n "${MEMTEST_PATH:-}" ]]; then
+  if [[ -n "$MEMTEST_PATH" ]]; then
     cat >> /mnt/boot/limine.conf <<EOF
 
 /Memtest86+
@@ -399,12 +295,32 @@ EOF
     path: boot():${MEMTEST_PATH}
 EOF
   fi
+}
 
-  cat >> /mnt/boot/limine.conf <<EOF
 
-#+SNAPSHOT_ENTRIES_BEGIN
-/Snapshots
-    comment: Bootfähige Snapshots werden später generiert.
-#+SNAPSHOT_ENTRIES_END
-EOF
+# =========================================
+# 🔥 Boot Setup final validieren
+# =========================================
+
+validiere_boot_setup() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    return 0
+  fi
+
+  [[ -f /mnt/boot/vmlinuz-linux ]] || {
+    error "Kernel fehlt → System nicht bootfähig"
+    exit 1
+  }
+
+  [[ -f /mnt/boot/initramfs-linux.img ]] || {
+    error "initramfs fehlt → System nicht bootfähig"
+    exit 1
+  }
+
+  [[ -f /mnt/boot/EFI/BOOT/BOOTX64.EFI ]] || {
+    error "EFI Bootloader fehlt"
+    exit 1
+  }
+
+  success "Boot validiert."
 }

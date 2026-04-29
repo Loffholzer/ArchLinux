@@ -1,20 +1,30 @@
 #!/usr/bin/env bash
-
 # =========================================
-# 04_base.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
-# Aufgabe:
-# - installiert das Basissystem nach /mnt
-# - nutzt pacstrap
+# Name:      04_base.sh
+# Zweck:     Basissystem installieren
 #
-# Voraussetzung:
-# - /mnt ist gemountet (aus 03_btrfs.sh)
+# Aufgabe:
+# - installiert base System via pacstrap
+#
+# Wichtig:
+# - benötigt korrekt gemountetes /mnt
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. /mnt MUSS validiert sein
+# 2. pacstrap darf nicht silent failen
+# 3. Paketliste deterministisch halten
 # =========================================
 
-# =========================
-# 🚀 Basissystem Setup ausführen
-# =========================
 
+# =========================================
+# 📦 Basissystem-Installation orchestrieren
+# -----------------------------------------
+# Steuert Installation des minimalen
+# Arch-Systems nach /mnt
+# =========================================
 run_base_install() {
   header "04 - Basissystem"
 
@@ -25,10 +35,12 @@ run_base_install() {
   success "Basissystem installiert."
 }
 
-# =========================
-# 🔒 Checks
-# =========================
-
+# =========================================
+# 🔒 Basis-System Voraussetzungen prüfen
+# -----------------------------------------
+# Stellt sicher, dass /mnt korrekt
+# gemountet ist vor pacstrap
+# =========================================
 pruefe_base_variablen() {
   if [[ "${DRY_RUN:-true}" != true ]]; then
     mountpoint -q /mnt || {
@@ -38,10 +50,12 @@ pruefe_base_variablen() {
   fi
 }
 
-# =========================
-# 📋 Plan anzeigen
-# =========================
-
+# =========================================
+# 📋 Basis-Pakete anzeigen
+# -----------------------------------------
+# Zeigt geplante Pakete für das
+# minimale Arch-Grundsystem
+# =========================================
 zeige_base_plan() {
   header "Geplante Installation"
 
@@ -58,10 +72,12 @@ zeige_base_plan() {
   echo
 }
 
-# =========================
-# 📦 Installation
-# =========================
-
+# =========================================
+# 📦 Basissystem installieren
+# -----------------------------------------
+# Führt pacstrap aus und installiert
+# Kernpakete ins Zielsystem
+# =========================================
 installiere_base() {
   local packages=(
     base

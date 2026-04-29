@@ -1,76 +1,108 @@
 #!/usr/bin/env bash
 
 # =========================================
-# 07_snapshots.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
+# Name:      07_snapshots.sh
+# Zweck:     BTRFS Snapshots (Snapper)
+#
 # Aufgabe:
 # - installiert snapper
-# - initialisiert Snapshot-Konfiguration
-# - setzt Basisstruktur für BTRFS Snapshots
+# - richtet root Snapshot-Konfiguration ein
+# - validiert Subvolume Struktur
 #
-# Voraussetzung:
-# - BTRFS läuft (aus 03)
+# Wichtig:
+# - falsche Snapper Config = kein Recovery
+# - falsche Rechte = Snapshots unbrauchbar
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. /mnt muss korrekt gemountet sein
+# 2. @snapshots MUSS existieren
+# 3. Snapper Config deterministisch
+# 4. Rechte strikt setzen
 # =========================================
 
-# =========================
-# 🚀 Snapshots Setup ausführen
-# =========================
+
+# =========================================
+# 🚀 Snapshot Setup orchestrieren
+# =========================================
 
 run_snapshot_setup() {
   header "07 - Snapshots"
 
   pruefe_snapshot_variablen
   zeige_snapshot_plan
+  validiere_snapshot_struktur
   installiere_snapper
   konfiguriere_snapper
+  validiere_snapper
 
   success "Snapshots vorbereitet."
 }
 
-# =========================
-# 🔒 Checks
-# =========================
+
+# =========================================
+# 🔒 Variablen prüfen
+# =========================================
 
 pruefe_snapshot_variablen() {
-  [[ -n "${ROOT_DEVICE:-}" ]] || { error "ROOT_DEVICE fehlt."; exit 1; }
+  guard_require_var ROOT_DEVICE
 
   if [[ "${DRY_RUN:-true}" != true ]]; then
-    mountpoint -q /mnt || {
-      error "/mnt ist nicht gemountet."
-      exit 1
-    }
-
-    mountpoint -q /mnt/.snapshots || {
-      error "/mnt/.snapshots ist nicht gemountet. BTRFS-Modul muss @snapshots mounten."
-      exit 1
-    }
-
-    findmnt -n -o FSTYPE /mnt/.snapshots | grep -qx "btrfs" || {
-      error "/mnt/.snapshots ist kein BTRFS-Mount."
-      exit 1
-    }
+    guard_mnt_mounted
   fi
 }
 
-# =========================
+
+# =========================================
 # 📋 Plan anzeigen
-# =========================
+# =========================================
 
 zeige_snapshot_plan() {
   header "Geplanter Snapshot-Aufbau"
 
   echo "Tool: snapper"
-  echo "Konfiguration:"
-  echo "  root → /"
-  echo
-
-  warn "Dieses Modul richtet Snapshots für BTRFS ein."
+  echo "Konfiguration: root → /"
   echo
 }
 
-# =========================
-# 📦 Installation
-# =========================
+
+# =========================================
+# 🔍 Snapshot-Struktur validieren
+# -----------------------------------------
+# Stellt sicher, dass Subvolume korrekt
+# gemountet und nutzbar ist
+# =========================================
+
+validiere_snapshot_struktur() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    return 0
+  fi
+
+  # .snapshots muss existieren
+  [[ -d /mnt/.snapshots ]] || {
+    error "/mnt/.snapshots existiert nicht"
+    exit 1
+  }
+
+  # Muss BTRFS sein
+  findmnt -n -o FSTYPE /mnt/.snapshots | grep -qx "btrfs" || {
+    error "/mnt/.snapshots ist kein BTRFS"
+    exit 1
+  }
+
+  # Muss korrektes Subvolume sein
+  findmnt -n -o OPTIONS /mnt/.snapshots | grep -q "subvol=@snapshots" || {
+    error "@snapshots Subvolume nicht korrekt gemountet"
+    exit 1
+  }
+}
+
+
+# =========================================
+# 📦 Snapper installieren
+# =========================================
 
 installiere_snapper() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
@@ -78,74 +110,82 @@ installiere_snapper() {
     return 0
   fi
 
-  log "Installiere snapper..."
-
-  arch-chroot /mnt pacman -S --noconfirm snapper || {
-    error "Snapper konnte nicht installiert werden."
-    exit 1
-  }
+  run_cmd arch-chroot /mnt pacman -S --noconfirm snapper
 }
 
-# =========================
-# ⚙ Snapper konfigurieren
-# =========================
+
+# =========================================
+# ⚙️ Snapper konfigurieren
+# -----------------------------------------
+# Erstellt saubere Root-Config
+# =========================================
 
 konfiguriere_snapper() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde snapper root-Konfiguration manuell erstellen"
-    warn "[DRY-RUN] würde vorhandenes @snapshots-Subvolume verwenden"
-    warn "[DRY-RUN] würde Rechte für /mnt/.snapshots setzen"
+    warn "[DRY-RUN] würde snapper konfigurieren"
     return 0
   fi
 
-  log "Konfiguriere snapper manuell..."
+  local config_dir="/mnt/etc/snapper/configs"
+  local config_file="${config_dir}/root"
 
-  mkdir -p /mnt/etc/snapper/configs
+  mkdir -p "$config_dir"
   mkdir -p /mnt/.snapshots
 
-  if [[ ! -f /mnt/etc/snapper/configs/root ]]; then
-    cat > /mnt/etc/snapper/configs/root <<'EOF'
+  # Wenn bereits vorhanden → NICHT überschreiben
+  if [[ -f "$config_file" ]]; then
+    warn "Snapper Config existiert bereits"
+  else
+    cat > "$config_file" <<'EOF'
 SUBVOLUME="/"
 FSTYPE="btrfs"
-QGROUP=""
-SPACE_LIMIT="0.5"
-FREE_LIMIT="0.2"
 ALLOW_USERS=""
 ALLOW_GROUPS="wheel"
 SYNC_ACL="yes"
-BACKGROUND_COMPARISON="yes"
-NUMBER_CLEANUP="yes"
-NUMBER_MIN_AGE="1800"
-NUMBER_LIMIT="50"
-NUMBER_LIMIT_IMPORTANT="10"
+
 TIMELINE_CREATE="yes"
 TIMELINE_CLEANUP="yes"
-TIMELINE_MIN_AGE="1800"
-TIMELINE_LIMIT_HOURLY="10"
-TIMELINE_LIMIT_DAILY="10"
-TIMELINE_LIMIT_WEEKLY="3"
-TIMELINE_LIMIT_MONTHLY="10"
-TIMELINE_LIMIT_YEARLY="10"
+
+NUMBER_CLEANUP="yes"
+
 EMPTY_PRE_POST_CLEANUP="yes"
-EMPTY_PRE_POST_MIN_AGE="1800"
 EOF
-  else
-    warn "Snapper-Konfiguration root existiert bereits, überspringe."
   fi
 
-  if [[ -f /mnt/etc/conf.d/snapper ]]; then
-    sed -i 's/^SNAPPER_CONFIGS=.*/SNAPPER_CONFIGS="root"/' /mnt/etc/conf.d/snapper
-  else
-    mkdir -p /mnt/etc/conf.d
-    echo 'SNAPPER_CONFIGS="root"' > /mnt/etc/conf.d/snapper
-  fi
+  # Snapper aktivieren
+  mkdir -p /mnt/etc/conf.d
+  echo 'SNAPPER_CONFIGS="root"' > /mnt/etc/conf.d/snapper
 
-  # Gruppen-Rechte für wheel setzen, damit der User Snapshots lesen kann
+  # Rechte setzen (CRITICAL)
   arch-chroot /mnt chown root:wheel /.snapshots
-  chmod 750 /mnt/.snapshots || {
-    error "Rechte für /mnt/.snapshots konnten nicht gesetzt werden."
+  chmod 750 /mnt/.snapshots
+}
+
+
+# =========================================
+# 🔥 Snapper Setup validieren
+# -----------------------------------------
+# Stellt sicher, dass Snapper korrekt
+# funktioniert und nutzbar ist
+# =========================================
+
+validiere_snapper() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    return 0
+  fi
+
+  local config="/mnt/etc/snapper/configs/root"
+
+  [[ -f "$config" ]] || {
+    error "Snapper Config fehlt"
     exit 1
   }
 
-  success "Snapper konfiguriert."
+  # Snapper Testlauf
+  arch-chroot /mnt snapper -c root list >/dev/null 2>&1 || {
+    error "Snapper funktioniert nicht korrekt"
+    exit 1
+  }
+
+  success "Snapper validiert."
 }

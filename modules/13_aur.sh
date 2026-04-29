@@ -1,20 +1,29 @@
 #!/usr/bin/env bash
-
 # =========================================
-# 13_aur.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
-# Aufgabe:
-# - installiert paru als AUR-Helper
+# Name:      13_aur.sh
+# Zweck:     AUR Integration
 #
-# Voraussetzung:
-# - Benutzer existiert
-# - git/base-devel vorhanden oder installierbar
+# Aufgabe:
+# - installiert paru
+#
+# Wichtig:
+# - temporäre sudo Rechte kritisch
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. sudo temporär und sicher entfernen
+# 2. Build nicht als root
 # =========================================
 
-# =========================
-# 🚀 AUR Setup ausführen
-# =========================
 
+# =========================================
+# 🏗️ AUR-Setup orchestrieren
+# -----------------------------------------
+# Steuert Installation und Konfiguration
+# des AUR-Helpers paru
+# =========================================
 run_aur_setup() {
   header "13 - AUR"
 
@@ -26,10 +35,12 @@ run_aur_setup() {
   success "AUR vorbereitet."
 }
 
-# =========================
-# 🔒 Checks
-# =========================
-
+# =========================================
+# 🔒 AUR-Voraussetzungen prüfen
+# -----------------------------------------
+# Validiert Benutzer und stellt sicher,
+# dass Zielsystem gemountet ist
+# =========================================
 pruefe_aur_variablen() {
   [[ -n "${USERNAME:-}" ]] || { error "USERNAME fehlt."; exit 1; }
 
@@ -41,10 +52,12 @@ pruefe_aur_variablen() {
   fi
 }
 
-# =========================
-# 📋 Plan anzeigen
-# =========================
-
+# =========================================
+# 📋 AUR-Setup anzeigen
+# -----------------------------------------
+# Zeigt geplante Installation von paru
+# und Benutzerkontext
+# =========================================
 zeige_aur_plan() {
   header "Geplante AUR-Einrichtung"
 
@@ -56,10 +69,12 @@ zeige_aur_plan() {
   echo
 }
 
-# =========================
-# 📦 Paru (AUR) installieren
-# =========================
-
+# =========================================
+# 📦 paru installieren
+# -----------------------------------------
+# Baut und installiert paru sicher
+# mit temporären sudo-Rechten
+# =========================================
 installiere_paru() {
   local sudoers_file="/mnt/etc/sudoers.d/10-installer"
 
@@ -81,6 +96,11 @@ installiere_paru() {
 
   trap cleanup_installer_sudo RETURN
 
+  arch-chroot /mnt visudo -c || {
+    error "sudoers ist nach temporärer Datei ungültig."
+    return 1
+  }
+
   log "Installiere Abhängigkeiten für paru..."
   arch-chroot /mnt pacman -S --noconfirm base-devel git sudo || {
     error "Abhängigkeiten für paru konnten nicht installiert werden."
@@ -89,6 +109,7 @@ installiere_paru() {
 
   log "Baue und installiere paru als Benutzer $USERNAME..."
   arch-chroot /mnt sudo -u "$USERNAME" bash -c "
+    set -euo pipefail
     cd /tmp
     rm -rf paru
     git clone https://aur.archlinux.org/paru.git
@@ -105,10 +126,12 @@ installiere_paru() {
   success "paru erfolgreich installiert."
 }
 
-# =========================
+# =========================================
 # ⚙️ paru konfigurieren
-# =========================
-
+# -----------------------------------------
+# Setzt definierte Default-Optionen
+# für reproduzierbares Verhalten
+# =========================================
 konfiguriere_paru() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde paru konfigurieren (BottomUp, Color, SudoLoop, RemoveMake)"

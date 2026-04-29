@@ -1,4 +1,24 @@
 #!/usr/bin/env bash
+# =========================================
+# 📦 UI & Logging Bibliothek
+# -----------------------------------------
+# Name:      ui.sh
+# Zweck:     Ausgabe & Interaktion
+#
+# Aufgabe:
+# - Logging (info, warn, error)
+# - UI-Komponenten
+# - Formatierung
+#
+# Wichtig:
+# - KEINE Systemlogik
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. nur Darstellung
+# 2. keine Seiteneffekte
+# =========================================
+
 
 # =========================
 # 🎨 Farben & Logging
@@ -12,30 +32,76 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# =========================================
+# ℹ️ Info-Log ausgeben
+# -----------------------------------------
+# Gibt formatierte Informationsmeldungen
+# für normalen Ablauf aus
+# =========================================
 log()     { echo -e "${BLUE}[INFO]${NC} $1"; }
+
+# =========================================
+# ✅ Erfolgsmeldung ausgeben
+# -----------------------------------------
+# Signalisiert erfolgreich abgeschlossene
+# Schritte im Installationsprozess
+# =========================================
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
+
+# =========================================
+# ⚠️ Warnung ausgeben
+# -----------------------------------------
+# Zeigt nicht-kritische Probleme oder
+# Hinweise für den Benutzer an
+# =========================================
 warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
+
+# =========================================
+# ❌ Fehlermeldung ausgeben
+# -----------------------------------------
+# Signalisiert kritische Fehlerzustände
+# im Installationsprozess
+# =========================================
 error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# =========================================
+# 📌 Abschnitts-Header anzeigen
+# -----------------------------------------
+# Hebt neue Installationsphasen visuell hervor
+# =========================================
 header() {
   echo
   echo -e "${BLUE}=== $1 ===${NC}"
 }
 
+# =========================================
+# 🔢 Nummer formatieren
+# -----------------------------------------
+# Formatiert Zahlen für konsistente
+# Anzeige in Menüs
+# =========================================
 num() {
   echo -e "${YELLOW}${BOLD}$1${NC}"
 }
 
-# =========================
-# 📋 Listen / Ausgabe
-# =========================
-
+# =========================================
+# 📋 Menüoption anzeigen
+# -----------------------------------------
+# Gibt nummerierte Auswahloptionen
+# für Benutzerinteraktion aus
+# =========================================
 print_option() {
   local number="$1"
   local text="$2"
   echo -e "$(num "[$number]") $text"
 }
 
+# =========================================
+# 📊 Spaltenlayout anzeigen
+# -----------------------------------------
+# Formatiert Listen dynamisch in
+# mehrere Spalten je nach Terminalbreite
+# =========================================
 print_columns() {
   local -n items=$1
 
@@ -73,6 +139,12 @@ print_columns() {
   echo
 }
 
+# =========================================
+# 🔍 Suchergebnisse anzeigen
+# -----------------------------------------
+# Zeigt gefilterte Ergebnisse mit
+# Kontext und Navigation an
+# =========================================
 print_search_results() {
   local title="$1"
   local search="$2"
@@ -94,10 +166,12 @@ print_search_results() {
   print_columns results
 }
 
-# =========================
-# 📊 Status / Phasen
-# =========================
-
+# =========================================
+# 🌐 Locales formatieren
+# -----------------------------------------
+# Ordnet Locales und stellt sicher,
+# dass en_US.UTF-8 zuletzt steht
+# =========================================
 format_locales() {
   declare -p LOCALES >/dev/null 2>&1 || return 0
 
@@ -124,6 +198,12 @@ format_locales() {
   echo "${result[*]}"
 }
 
+# =========================================
+# 📊 Statusübersicht anzeigen
+# -----------------------------------------
+# Zeigt aktuellen Fortschritt von
+# Keymap, Timezone und Locales
+# =========================================
 print_info_block() {
   local has_info=false
 
@@ -145,6 +225,12 @@ print_info_block() {
   echo
 }
 
+# =========================================
+# 🧭 Phasen-Header anzeigen
+# -----------------------------------------
+# Kombiniert Statusanzeige mit neuem
+# Abschnitt für bessere Orientierung
+# =========================================
 phase_header() {
   clear
 

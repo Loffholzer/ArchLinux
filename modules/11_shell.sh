@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-
 # =========================================
-# 11_shell.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
-# Aufgabe:
-# - installiert fish + starship
-# - setzt fish als default shell
-# - richtet einfache Aliase ein
+# Name:      11_shell.sh
+# Zweck:     Shell Setup
 #
-# Voraussetzung:
-# - User existiert (08)
+# Aufgabe:
+# - installiert fish + tools
+# - konfiguriert Benutzerumgebung
+#
+# Wichtig:
+# - rein kosmetisch / UX
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. idempotent konfigurieren
+# 2. keine bestehenden configs zerstören
 # =========================================
 
-# =========================
-# 🚀 Shell Setup ausführen
-# =========================
 
+# =========================================
+# 🐚 Shell-Setup orchestrieren
+# -----------------------------------------
+# Steuert Installation und Konfiguration
+# von fish, starship und Shell-Umgebung
+# =========================================
 run_shell_setup() {
   header "11 - Shell"
 
@@ -29,10 +38,12 @@ run_shell_setup() {
   success "Shell eingerichtet."
 }
 
-# =========================
-# 🔒 Checks
-# =========================
-
+# =========================================
+# 🔒 Shell-Voraussetzungen prüfen
+# -----------------------------------------
+# Validiert Username und stellt sicher,
+# dass das Zielsystem gemountet ist
+# =========================================
 pruefe_shell_variablen() {
   [[ -n "${USERNAME:-}" ]] || { error "USERNAME fehlt."; exit 1; }
 
@@ -44,10 +55,12 @@ pruefe_shell_variablen() {
   fi
 }
 
-# =========================
-# 📋 Plan anzeigen
-# =========================
-
+# =========================================
+# 📋 Shell-Konfiguration anzeigen
+# -----------------------------------------
+# Zeigt geplante Shell, Tools und
+# Anpassungen vor Installation
+# =========================================
 zeige_shell_plan() {
   header "Geplante Shell-Konfiguration"
 
@@ -61,10 +74,12 @@ zeige_shell_plan() {
   echo
 }
 
-# =========================
-# 📦 Installation
-# =========================
-
+# =========================================
+# 📦 Shell-Tools installieren
+# -----------------------------------------
+# Installiert fish, starship und
+# unterstützende CLI-Utilities
+# =========================================
 installiere_shell_tools() {
   # Vollständige Liste aller in der config.fish genutzten Tools
   local packages=(
@@ -91,10 +106,12 @@ installiere_shell_tools() {
   }
 }
 
-# =========================
-# 🐟 Default Shell setzen
-# =========================
-
+# =========================================
+# 🔄 Default-Shell setzen
+# -----------------------------------------
+# Setzt fish als Login-Shell für
+# Benutzer und optional root
+# =========================================
 setze_default_shell() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde fish als Default-Shell für $USERNAME und root setzen"
@@ -107,10 +124,12 @@ setze_default_shell() {
   arch-chroot /mnt chsh -s /usr/bin/fish root
 }
 
-# =========================
+# =========================================
 # ✨ Starship konfigurieren
-# =========================
-
+# -----------------------------------------
+# Aktiviert starship im fish-Setup
+# und stellt idempotente Konfiguration sicher
+# =========================================
 konfiguriere_starship() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde starship für fish aktivieren"
@@ -135,10 +154,12 @@ konfiguriere_starship() {
   arch-chroot /mnt chown "${USERNAME}:${USERNAME}" "/home/${USERNAME}/.config/fish/config.fish"
 }
 
-# =========================
-# ⚡ Aliase
-# =========================
-
+# =========================================
+# ⚡ Shell-Aliase konfigurieren
+# -----------------------------------------
+# Erstellt zentrale config.fish mit
+# Aliases und Tool-Initialisierung
+# =========================================
 setze_aliases() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde config.fish für User und Root generieren"

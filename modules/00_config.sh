@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
-
 # =========================================
-# 00_config.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
-# Konfigurationsmodul
+# Name:      00_config.sh
+# Zweck:     Benutzerkonfiguration erfassen
 #
 # Aufgabe:
-# - sammelt alle Benutzereingaben
-# - validiert Eingaben
-# - zeigt Zusammenfassung + Bestätigung
+# - sammelt alle Eingaben
+# - validiert Werte
+# - bestätigt Konfiguration
 #
 # Wichtig:
-# - keine destruktiven Aktionen
-# - respektiert DRY_RUN
+# - KEINE destruktiven Operationen
+# - Grundlage für alle weiteren Module
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. Keine Systemänderungen
+# 2. Eingaben immer validieren
+# 3. Defaults müssen sicher sein
+# 4. AUTO_MODE nur mit DRY_RUN erlaubt
 # =========================================
 
 
@@ -25,6 +32,12 @@ declare -a LOCALES=()
 
 CONSOLE_FONT="${CONSOLE_FONT:-ter-v28n}"
 
+# =========================================
+# 🤖 Default-Konfiguration setzen (AUTO_MODE)
+# -----------------------------------------
+# Setzt sichere Standardwerte für automatischen
+# Ablauf ohne Benutzerinteraktion (nur DRY_RUN)
+# =========================================
 set_default_config() {
   header "AUTO-MODE"
 
@@ -58,10 +71,12 @@ set_default_config() {
   CONSOLE_FONT="ter-v28n"
 }
 
-# =========================
-# 📤 Config exportieren
-# =========================
-
+# =========================================
+# 📤 Konfiguration exportieren
+# -----------------------------------------
+# Exportiert alle Variablen für Module,
+# damit sie global verfügbar sind
+# =========================================
 export_config() {
   export KEYMAP TIMEZONE LANG_DEFAULT
   export DISK INSTALL_PROFILE USE_LUKS
@@ -72,10 +87,12 @@ export_config() {
   export CONSOLE_FONT
 }
 
-# =========================
-# 🔧 Helper
-# =========================
-
+# =========================================
+# ❓ Ja/Nein Eingabe abfragen
+# -----------------------------------------
+# Standardisierte Benutzerabfrage mit
+# robuster Eingabevalidierung
+# =========================================
 ask_yes_no() {
   local prompt="$1"
   local answer
@@ -100,10 +117,12 @@ ask_yes_no() {
   done
 }
 
-# =========================
-# 🔒 Checks
-# =========================
-
+# =========================================
+# 🔒 Root-Rechte prüfen
+# -----------------------------------------
+# Stellt sicher, dass das Script mit
+# administrativen Rechten läuft
+# =========================================
 check_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
     error "Bitte als root ausführen."
@@ -113,6 +132,12 @@ check_root() {
   return 0
 }
 
+# =========================================
+# 🖥️ UEFI-Modus prüfen
+# -----------------------------------------
+# Verhindert Installation auf nicht
+# unterstützten BIOS-Systemen
+# =========================================
 check_uefi() {
   if [[ ! -d /sys/firmware/efi ]]; then
     error "UEFI erforderlich."
@@ -122,22 +147,32 @@ check_uefi() {
   return 0
 }
 
-# =========================
-# 🔍 Validierung
-# =========================
-
+# =========================================
+# 🔤 Hostname validieren
+# -----------------------------------------
+# Prüft RFC-konformen Hostnamen zur
+# Vermeidung späterer Netzwerkprobleme
+# =========================================
 validate_hostname_value() {
   [[ "$1" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]
 }
 
+# =========================================
+# 👤 Benutzername validieren
+# -----------------------------------------
+# Validiert Username gegen Linux-
+# Konventionen und Sicherheitsregeln
+# =========================================
 validate_username_value() {
   [[ "$1" =~ ^[a-z_][a-z0-9_-]*$ ]]
 }
 
-# =========================
-# ⌨️ Keyboard
-# =========================
-
+# =========================================
+# ⌨️ Tastaturlayout auswählen
+# -----------------------------------------
+# Ermöglicht Auswahl oder Suche eines
+# gültigen Keymaps mit Fallback
+# =========================================
 select_keyboard() {
   local choice
   local detected=""
@@ -231,10 +266,12 @@ select_keyboard() {
   fi
 }
 
-# =========================
-# 🌍 Timezone
-# =========================
-
+# =========================================
+# 🌍 Zeitzone automatisch erkennen
+# -----------------------------------------
+# Versucht Zeitzone via IP-Service zu
+# bestimmen (optional, nicht kritisch)
+# =========================================
 detect_timezone() {
   command -v curl >/dev/null 2>&1 || return 0
 
@@ -248,6 +285,12 @@ detect_timezone() {
   return 0
 }
 
+# =========================================
+# 🔍 Zeitzone manuell suchen
+# -----------------------------------------
+# Interaktive Suche mit begrenzten
+# Ergebnissen zur besseren UX
+# =========================================
 select_timezone_manual() {
  local search choice
  local max_results=20
@@ -299,6 +342,12 @@ select_timezone_manual() {
  done
 }
 
+# =========================================
+# 🌍 Zeitzone auswählen
+# -----------------------------------------
+# Kombiniert automatische Erkennung
+# mit manuellem Fallback
+# =========================================
 select_timezone() {
   local detected
   local choice
@@ -353,10 +402,12 @@ select_timezone() {
   done
 }
 
-# =========================
-# 🌐 Locale
-# =========================
-
+# =========================================
+# 🌐 Locale auswählen
+# -----------------------------------------
+# Setzt Systemsprache mit sicherem
+# Default (en_US.UTF-8 immer vorhanden)
+# =========================================
 select_locale() {
   local detected=""
   local choice
@@ -405,6 +456,12 @@ select_locale() {
   done
 }
 
+# =========================================
+# 🔍 Locale manuell suchen
+# -----------------------------------------
+# Durchsucht locale.gen und ermöglicht
+# gezielte Auswahl verfügbarer Locales
+# =========================================
 select_locale_manual() {
   local search choice selected
   local max_results=20
@@ -469,10 +526,12 @@ select_locale_manual() {
   done
 }
 
-# =========================
-# 💽 Disk Auswahl
-# =========================
-
+# =========================================
+# 💽 Ziellaufwerk auswählen
+# -----------------------------------------
+# Listet verfügbare Disks und verhindert
+# ungültige oder leere Auswahl
+# =========================================
 select_disk() {
   local choice entry
 
@@ -507,10 +566,12 @@ select_disk() {
   done
 }
 
-# =========================
-# 🧩 Installationsprofil
-# =========================
-
+# =========================================
+# 🧩 Installationsprofil auswählen
+# -----------------------------------------
+# Bestimmt Layout (Standard oder LUKS)
+# und setzt abhängige Variablen
+# =========================================
 select_install_profile() {
   local choice
 
@@ -540,10 +601,12 @@ select_install_profile() {
   done
 }
 
-# =========================
-# 🔐 Passwörter
-# =========================
-
+# =========================================
+# 🔐 Passwörter sicher abfragen
+# -----------------------------------------
+# Erfasst und validiert Benutzer- und
+# optional LUKS-Passwörter
+# =========================================
 ask_passwords() {
   while true; do
     read -rsp "$(echo -e "${BLUE}[INPUT]${NC} Benutzer-Passwort: ")" USER_PASSWORD
@@ -576,10 +639,12 @@ ask_passwords() {
   fi
 }
 
-# =========================
-# 🧠 Config sammeln
-# =========================
-
+# =========================================
+# 🧠 Benutzerkonfiguration sammeln
+# -----------------------------------------
+# Führt gesamten interaktiven Setup-Prozess
+# und setzt alle erforderlichen Variablen
+# =========================================
 collect_config() {
   if [[ "$AUTO_MODE" == true ]]; then
     if [[ "${DRY_RUN:-true}" != true ]]; then
@@ -634,10 +699,12 @@ collect_config() {
   INSTALL_SSH="$(ask_yes_no "SSH (OpenSSH) installieren und aktivieren?")"
 }
 
-# =========================
-# ✔ Validierung
-# =========================
-
+# =========================================
+# ✔ Konfiguration validieren
+# -----------------------------------------
+# Prüft Vollständigkeit und Konsistenz
+# aller Eingaben vor Installation
+# =========================================
 validate_config() {
   header "Validierung"
 
@@ -657,10 +724,12 @@ validate_config() {
   success "Konfiguration gültig."
 }
 
-# =========================
-# 📋 Bestätigung
-# =========================
-
+# =========================================
+# 📋 Konfiguration bestätigen
+# -----------------------------------------
+# Zeigt finale Zusammenfassung und
+# fordert explizite Bestätigung
+# =========================================
 confirm_config() {
   if [[ "${AUTO_MODE:-false}" == true ]]; then
     warn "[AUTO-MODE] Bestätigung wird übersprungen."
@@ -710,10 +779,12 @@ confirm_config() {
   done
 }
 
-# =========================
+# =========================================
 # 🔍 CPU-Microcode erkennen
-# =========================
-
+# -----------------------------------------
+# Erkennt CPU-Typ und wählt passendes
+# Microcode-Paket für Stabilität
+# =========================================
 bestimme_microcode_paket() {
   local cpu_vendor
   cpu_vendor=$(grep -m1 'vendor_id' /proc/cpuinfo | awk '{print $3}')

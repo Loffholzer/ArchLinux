@@ -1,20 +1,29 @@
 #!/usr/bin/env bash
-
 # =========================================
-# 14_editor.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
-# Aufgabe:
-# - installiert nano (falls gewünscht)
-# - setzt sinnvolle nanorc Defaults
+# Name:      14_editor.sh
+# Zweck:     Editor Setup
 #
-# Voraussetzung:
-# - System installiert (/mnt)
+# Aufgabe:
+# - installiert nano
+# - setzt Defaults
+#
+# Wichtig:
+# - optional
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. Config nicht doppelt schreiben
 # =========================================
 
-# =========================
-# 🚀 Editor Setup ausführen
-# =========================
 
+# =========================================
+# 📝 Editor-Setup orchestrieren
+# -----------------------------------------
+# Steuert Installation und Konfiguration
+# des Nano-Editors
+# =========================================
 run_editor_setup() {
   header "14 - Editor"
 
@@ -26,10 +35,12 @@ run_editor_setup() {
   success "Editor eingerichtet."
 }
 
-# =========================
-# 🔒 Checks
-# =========================
-
+# =========================================
+# 🔒 Editor-Voraussetzungen prüfen
+# -----------------------------------------
+# Stellt sicher, dass das Zielsystem
+# korrekt gemountet ist
+# =========================================
 pruefe_editor_variablen() {
   if [[ "${DRY_RUN:-true}" != true ]]; then
     mountpoint -q /mnt || {
@@ -39,10 +50,12 @@ pruefe_editor_variablen() {
   fi
 }
 
-# =========================
-# 📋 Plan anzeigen
-# =========================
-
+# =========================================
+# 📋 Editor-Konfiguration anzeigen
+# -----------------------------------------
+# Zeigt geplante Nano-Features
+# und Einstellungen
+# =========================================
 zeige_editor_plan() {
   header "Geplante Editor-Konfiguration"
 
@@ -57,10 +70,11 @@ zeige_editor_plan() {
   echo
 }
 
-# =========================
-# 📦 Installation
-# =========================
-
+# =========================================
+# 📦 Nano installieren
+# -----------------------------------------
+# Installiert Nano im Zielsystem
+# =========================================
 installiere_nano() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde nano installieren"
@@ -72,10 +86,12 @@ installiere_nano() {
   arch-chroot /mnt pacman -S --noconfirm nano
 }
 
-# =========================
-# ⚙ Nano konfigurieren
-# =========================
-
+# =========================================
+# ⚙️ Nano konfigurieren
+# -----------------------------------------
+# Ergänzt nanorc um sinnvolle Defaults
+# und aktiviert Syntax-Highlighting
+# =========================================
 konfiguriere_nano() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde nanorc konfigurieren"

@@ -1,23 +1,34 @@
 #!/usr/bin/env bash
-
 # =========================================
-# 02_encryption.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
+# Name:      02_encryption.sh
+# Zweck:     LUKS-Verschlüsselung
+#
 # Aufgabe:
-# - prüft ob LUKS aktiviert ist
-# - verschlüsselt optional ROOT_PART
-# - öffnet LUKS als /dev/mapper/cryptroot
-# - setzt ROOT_DEVICE für BTRFS
+# - optional LUKS einrichten
+# - Container öffnen
+# - Root-Device definieren
 #
 # Wichtig:
-# - kein BTRFS
-# - keine Mounts
+# - Passwort sensibel behandeln
+# - kein Logging von Secrets
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. KEINE Passwort-Ausgabe
+# 2. Fehler sofort abbrechen
+# 3. Device nach Öffnen validieren
+# 4. Mapper sauber schließen bei Abbruch
 # =========================================
 
-# =========================
-# 🚀 Verschlüsselung Setup ausführen
-# =========================
 
+# =========================================
+# 🔐 Verschlüsselung orchestrieren
+# -----------------------------------------
+# Steuert optionales LUKS-Setup und setzt
+# korrektes Root-Device für Folgemodule
+# =========================================
 run_encryption_setup() {
   header "02 - Verschlüsselung"
 
@@ -42,10 +53,12 @@ run_encryption_setup() {
   success "Verschlüsselung vorbereitet."
 }
 
-# =========================
-# 🔒 Checks
-# =========================
-
+# =========================================
+# 🔒 Verschlüsselungs-Variablen prüfen
+# -----------------------------------------
+# Validiert Root-Partition und stellt
+# sichere Voraussetzungen für LUKS sicher
+# =========================================
 pruefe_encryption_variablen() {
   [[ -n "${ROOT_PART:-}" ]] || { error "ROOT_PART ist nicht gesetzt."; exit 1; }
   [[ -n "${USE_LUKS:-}" ]] || { error "USE_LUKS ist nicht gesetzt."; exit 1; }
@@ -55,10 +68,12 @@ pruefe_encryption_variablen() {
   fi
 }
 
-# =========================
-# 📋 Plan anzeigen
-# =========================
-
+# =========================================
+# 📋 LUKS-Setup anzeigen
+# -----------------------------------------
+# Zeigt geplante Verschlüsselung und
+# Mapping-Struktur für Transparenz
+# =========================================
 zeige_luks_plan() {
   header "Geplanter LUKS-Aufbau"
 
@@ -72,10 +87,12 @@ zeige_luks_plan() {
   echo
 }
 
-# =========================
-# 🔐 LUKS einrichten
-# =========================
-
+# =========================================
+# 🔐 LUKS sicher einrichten
+# -----------------------------------------
+# Formatiert und öffnet verschlüsseltes
+# Root-Device mit sicherer Übergabe
+# =========================================
 richte_luks_ein() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde ${ROOT_PART} mit LUKS formatieren"
@@ -97,16 +114,20 @@ richte_luks_ein() {
   }
 
   log "Formatiere ${ROOT_PART} mit LUKS..."
-  printf '%s' "$LUKS_PASSWORD" | cryptsetup luksFormat "$ROOT_PART" --batch-mode --key-file - || {
+  cryptsetup luksFormat "$ROOT_PART" --batch-mode --key-file <(printf '%s' "$LUKS_PASSWORD") || {
     error "LUKS-Formatierung fehlgeschlagen."
+    unset LUKS_PASSWORD
     exit 1
   }
 
   log "Öffne LUKS-Container als cryptroot..."
-  printf '%s' "$LUKS_PASSWORD" | cryptsetup open "$ROOT_PART" cryptroot --key-file - || {
+  cryptsetup open "$ROOT_PART" cryptroot --key-file <(printf '%s' "$LUKS_PASSWORD") || {
     error "LUKS konnte nicht geöffnet werden."
+    unset LUKS_PASSWORD
     exit 1
   }
+
+  unset LUKS_PASSWORD
 
   ROOT_DEVICE="/dev/mapper/cryptroot"
   ROOT_BASE_DEVICE="$ROOT_PART"

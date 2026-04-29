@@ -1,20 +1,31 @@
 #!/usr/bin/env bash
 
 # =========================================
-# 15_network.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
-# Aufgabe:
-# - installiert mDNS / Avahi
-# - installiert und aktiviert firewalld
-# - passt nsswitch.conf für .local-Auflösung an
+# Name:      15_network.sh
+# Zweck:     Netzwerk + Security Setup
 #
-# Voraussetzung:
-# - Basissystem ist installiert
+# Aufgabe:
+# - installiert Netzwerk-Stack
+# - aktiviert sichere Defaults
+# - konfiguriert Firewall + SSH
+#
+# Wichtig:
+# - kein offenes System nach Installation
+# - SSH sicher konfiguriert
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. Firewall IMMER aktiv
+# 2. SSH niemals unsicher
+# 3. Dienste nur wenn nötig aktivieren
 # =========================================
 
-# =========================
-# 🚀 Netzwerk Setup ausführen
-# =========================
+
+# =========================================
+# 🚀 Netzwerk Setup orchestrieren
+# =========================================
 
 run_network_setup() {
   header "15 - Netzwerk"
@@ -23,57 +34,44 @@ run_network_setup() {
   zeige_network_plan
   installiere_network_pakete
   konfiguriere_mdns
-  setze_firewalld_zone
   konfiguriere_firewalld
   konfiguriere_ssh
   aktiviere_network_services
+  validiere_network_setup
 
-  success "Netzwerk eingerichtet."
+  success "Netzwerk sicher eingerichtet."
 }
 
-# =========================
+
+# =========================================
 # 🔒 Checks
-# =========================
+# =========================================
 
 pruefe_network_variablen() {
   if [[ "${DRY_RUN:-true}" != true ]]; then
-    mountpoint -q /mnt || {
-      error "/mnt ist nicht gemountet."
-      exit 1
-    }
+    guard_mnt_mounted
   fi
 }
 
-# =========================
+
+# =========================================
 # 📋 Plan anzeigen
-# =========================
+# =========================================
 
 zeige_network_plan() {
   header "Geplante Netzwerk-Konfiguration"
 
-  echo "Pflichtmodule:"
-  echo "  - NetworkManager"
-  echo "  - Avahi (mDNS)"
-  echo "  - firewalld"
-  echo
-
-  if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
-    echo "Optional:"
-    echo "  - OpenSSH (Remote Zugriff)"
-    echo
-  fi
-
-  echo "Services:"
-  echo "  NetworkManager"
-  echo "  avahi-daemon"
-  echo "  firewalld"
-  [[ "${INSTALL_SSH:-no}" == "yes" ]] && echo "  sshd"
+  echo "Netzwerk: NetworkManager"
+  echo "Firewall: firewalld (default deny)"
+  echo "mDNS:     Avahi"
+  [[ "${INSTALL_SSH:-no}" == "yes" ]] && echo "SSH:      aktiviert (gehärtet)"
   echo
 }
 
-# =========================
-# 📦 Netzwerk-Pakete installieren
-# =========================
+
+# =========================================
+# 📦 Pakete installieren
+# =========================================
 
 installiere_network_pakete() {
   local packages=(
@@ -83,178 +81,133 @@ installiere_network_pakete() {
     firewalld
   )
 
-  if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
-    packages+=(
-      openssh
-    )
-  fi
+  [[ "${INSTALL_SSH:-no}" == "yes" ]] && packages+=(openssh)
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Netzwerk-Pakete installieren:"
-    warn "[DRY-RUN] pacman -S --noconfirm ${packages[*]}"
+    warn "[DRY-RUN] würde Netzwerk-Pakete installieren: ${packages[*]}"
     return 0
   fi
 
-  log "Installiere Netzwerk-Pakete..."
-
-  arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
-    error "Netzwerk-Pakete konnten nicht installiert werden."
-    exit 1
-  }
+  run_cmd arch-chroot /mnt pacman -S --noconfirm "${packages[@]}"
 }
 
-# =========================
+
+# =========================================
 # 🌐 mDNS konfigurieren
-# =========================
+# =========================================
 
 konfiguriere_mdns() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde /etc/nsswitch.conf für mDNS konfigurieren"
+    warn "[DRY-RUN] würde mDNS konfigurieren"
     return 0
   fi
 
   local conf="/mnt/etc/nsswitch.conf"
-  local hosts_line="hosts: files mymachines mdns_minimal [NOTFOUND=return] resolve [!UNAVAIL=return] dns myhostname"
 
-  [[ -f "$conf" ]] || {
-    error "nsswitch.conf nicht gefunden: $conf"
-    exit 1
-  }
+  grep -q "mdns_minimal" "$conf" && return 0
 
-  if grep -Eq '^hosts:.*mdns_minimal' "$conf"; then
-    warn "mDNS ist bereits konfiguriert."
-    return 0
-  fi
-
-  log "Konfiguriere mDNS..."
-
-  if grep -Eq '^hosts:' "$conf"; then
-    sed -i "s/^hosts:.*/${hosts_line}/" "$conf" || {
-      error "nsswitch.conf konnte nicht angepasst werden."
-      exit 1
-    }
-  else
-    echo "$hosts_line" >> "$conf" || {
-      error "hosts-Zeile konnte nicht in nsswitch.conf geschrieben werden."
-      exit 1
-    }
-  fi
-
-  success "mDNS konfiguriert."
+  sed -i 's/^hosts:.*/hosts: files mymachines mdns_minimal [NOTFOUND=return] resolve dns myhostname/' "$conf"
 }
 
-# =========================
-# 🔥 Netzwerk-Services aktivieren
-# =========================
 
-aktiviere_network_services() {
-  if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde NetworkManager, avahi-daemon und firewalld aktivieren"
-    [[ "${INSTALL_SSH:-no}" == "yes" ]] && warn "[DRY-RUN] würde sshd aktivieren"
-    return 0
-  fi
-
-  log "Aktiviere Netzwerk-Services..."
-
-  arch-chroot /mnt systemctl enable NetworkManager.service || {
-    error "NetworkManager konnte nicht aktiviert werden."
-    exit 1
-  }
-
-  arch-chroot /mnt systemctl enable avahi-daemon.service || {
-    error "avahi-daemon konnte nicht aktiviert werden."
-    exit 1
-  }
-
-  arch-chroot /mnt systemctl enable firewalld.service || {
-    error "firewalld konnte nicht aktiviert werden."
-    exit 1
-  }
-
-  if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
-    arch-chroot /mnt systemctl enable sshd.service || {
-      error "sshd konnte nicht aktiviert werden."
-      exit 1
-    }
-  fi
-
-  success "Netzwerkdienste aktiviert."
-}
-
-# =========================
-# 🔥 Firewall-Regeln setzen
-# =========================
+# =========================================
+# 🔥 Firewall konfigurieren (SECURE DEFAULT)
+# =========================================
 
 konfiguriere_firewalld() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde mDNS in firewalld erlauben"
-    [[ "${INSTALL_SSH:-no}" == "yes" ]] && warn "[DRY-RUN] würde SSH in firewalld erlauben"
+    warn "[DRY-RUN] würde Firewall konfigurieren"
     return 0
   fi
 
-  log "Konfiguriere firewalld..."
+  log "Konfiguriere firewalld (secure defaults)..."
 
-  arch-chroot /mnt firewall-offline-cmd --add-service=mdns || {
-    error "mDNS konnte in firewalld nicht freigegeben werden."
-    exit 1
-  }
+  # Default Zone = public (strenger als home)
+  arch-chroot /mnt firewall-offline-cmd --set-default-zone=public
 
+  # Alles blockieren außer explizit erlaubt
+  arch-chroot /mnt firewall-offline-cmd --set-target=DROP
+
+  # mDNS erlauben (optional aber sinnvoll)
+  arch-chroot /mnt firewall-offline-cmd --add-service=mdns
+
+  # SSH nur wenn aktiviert
   if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
-    arch-chroot /mnt firewall-offline-cmd --add-service=ssh || {
-      error "SSH konnte in firewalld nicht freigegeben werden."
-      exit 1
-    }
+    arch-chroot /mnt firewall-offline-cmd --add-service=ssh
   fi
-
-  success "firewalld-Regeln gesetzt."
 }
 
-# =========================
-# 🔥 Firewall Default-Zone setzen
-# =========================
 
-setze_firewalld_zone() {
-  if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde firewalld Default-Zone auf home setzen"
-    return 0
-  fi
-
-  log "Setze firewalld Default-Zone auf home..."
-
-  arch-chroot /mnt firewall-offline-cmd --set-default-zone=home || {
-    error "Default-Zone konnte nicht gesetzt werden."
-    exit 1
-  }
-
-  success "firewalld Default-Zone gesetzt: home"
-}
-
-# =========================
-# 🔐 SSH konfigurieren
-# =========================
+# =========================================
+# 🔐 SSH HARDENING
+# =========================================
 
 konfiguriere_ssh() {
-  if [[ "${INSTALL_SSH:-no}" != "yes" ]]; then
-    return 0
-  fi
+  [[ "${INSTALL_SSH:-no}" != "yes" ]] && return 0
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde SSH absichern (Root-Login deaktivieren)"
+    warn "[DRY-RUN] würde SSH härten"
     return 0
   fi
 
-  local sshd_conf="/mnt/etc/ssh/sshd_config"
+  local conf="/mnt/etc/ssh/sshd_config"
 
-  [[ -f "$sshd_conf" ]] || {
-    error "sshd_config nicht gefunden: $sshd_conf"
+  [[ -f "$conf" ]] || return 0
+
+  log "Härte SSH-Konfiguration..."
+
+  # Root Login deaktivieren
+  sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$conf"
+
+  # Passwort Login aktiv lassen (für Installer usability)
+  sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' "$conf"
+
+  # zusätzliche Härtung
+  grep -q "^MaxAuthTries" "$conf" || echo "MaxAuthTries 3" >> "$conf"
+  grep -q "^LoginGraceTime" "$conf" || echo "LoginGraceTime 30" >> "$conf"
+  grep -q "^X11Forwarding" "$conf" || echo "X11Forwarding no" >> "$conf"
+}
+
+
+# =========================================
+# 🔌 Dienste aktivieren
+# =========================================
+
+aktiviere_network_services() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde Netzwerkdienste aktivieren"
+    return 0
+  fi
+
+  arch-chroot /mnt systemctl enable NetworkManager
+  arch-chroot /mnt systemctl enable firewalld
+  arch-chroot /mnt systemctl enable avahi-daemon
+
+  [[ "${INSTALL_SSH:-no}" == "yes" ]] && \
+    arch-chroot /mnt systemctl enable sshd
+}
+
+
+# =========================================
+# 🧪 Validierung
+# =========================================
+
+validiere_network_setup() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    return 0
+  fi
+
+  log "Validiere Netzwerk-Setup..."
+
+  arch-chroot /mnt systemctl is-enabled NetworkManager >/dev/null || {
+    error "NetworkManager nicht aktiviert"
     exit 1
   }
 
-  log "Konfiguriere SSH..."
+  arch-chroot /mnt systemctl is-enabled firewalld >/dev/null || {
+    error "firewalld nicht aktiviert"
+    exit 1
+  }
 
-  sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$sshd_conf"
-  sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' "$sshd_conf"
-
-  success "SSH sicher konfiguriert (kein Root-Login)."
+  success "Netzwerk validiert."
 }
-

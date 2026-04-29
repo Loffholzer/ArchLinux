@@ -1,22 +1,32 @@
 #!/usr/bin/env bash
-
 # =========================================
-# 09_user.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
+# Name:      09_user.sh
+# Zweck:     Benutzerverwaltung
+#
 # Aufgabe:
-# - erstellt Benutzer
+# - erstellt User
 # - setzt Passwort
 # - konfiguriert sudo
-# - optional: Root sperren
 #
-# Voraussetzung:
-# - System ist installiert (/mnt)
+# Wichtig:
+# - sicherheitskritisch
+# =========================================
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. Passwörter nie loggen
+# 2. sudo sauber konfigurieren
+# 3. root optional sperren
 # =========================================
 
-# =========================
-# 🚀 Benutzer Setup ausführen
-# =========================
 
+# =========================================
+# 👤 Benutzer-Setup orchestrieren
+# -----------------------------------------
+# Steuert Erstellung des Users,
+# Passwort und Rechtekonfiguration
+# =========================================
 run_user_setup() {
   header "09 - Benutzer"
 
@@ -30,10 +40,12 @@ run_user_setup() {
   success "Benutzer eingerichtet."
 }
 
-# =========================
-# 🔒 Checks
-# =========================
-
+# =========================================
+# 🔒 Benutzer-Variablen prüfen
+# -----------------------------------------
+# Validiert Username, Passwort und
+# gemountetes Zielsystem
+# =========================================
 pruefe_user_variablen() {
   [[ -n "${USERNAME:-}" ]] || { error "USERNAME fehlt."; exit 1; }
   [[ -n "${USER_PASSWORD:-}" ]] || { error "USER_PASSWORD fehlt."; exit 1; }
@@ -46,10 +58,12 @@ pruefe_user_variablen() {
   fi
 }
 
-# =========================
-# 📋 Plan anzeigen
-# =========================
-
+# =========================================
+# 📋 Benutzerkonfiguration anzeigen
+# -----------------------------------------
+# Zeigt geplanten User, sudo und
+# Root-Status vor Anwendung
+# =========================================
 zeige_user_plan() {
   header "Geplante Benutzerkonfiguration"
 
@@ -62,25 +76,35 @@ zeige_user_plan() {
   echo
 }
 
-# =========================
-# 👤 User erstellen
-# =========================
-
+# =========================================
+# 👤 Benutzer erstellen
+# -----------------------------------------
+# Legt neuen User mit Home-Verzeichnis
+# und Gruppenmitgliedschaft an
+# =========================================
 erstelle_user() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Benutzer erstellen: $USERNAME"
     return 0
   fi
 
-  log "Erstelle Benutzer..."
+  if arch-chroot /mnt id "$USERNAME" &>/dev/null; then
+    warn "Benutzer existiert bereits, überspringe."
+    return 0
+  fi
 
-  arch-chroot /mnt useradd -m -G wheel -s /bin/bash "$USERNAME"
+  arch-chroot /mnt useradd -m -G wheel -s /bin/bash "$USERNAME" || {
+    error "User konnte nicht erstellt werden."
+    exit 1
+  }
 }
 
-# =========================
-# 🔐 Passwörter
-# =========================
-
+# =========================================
+# 🔐 Benutzer-Passwort setzen
+# -----------------------------------------
+# Setzt Passwort im Zielsystem
+# via chpasswd
+# =========================================
 setze_passwoerter() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Passwort für $USERNAME setzen"
@@ -92,25 +116,35 @@ setze_passwoerter() {
   echo "${USERNAME}:${USER_PASSWORD}" | arch-chroot /mnt chpasswd
 }
 
-# =========================
-# 🛡 Sudo
-# =========================
-
+# =========================================
+# 🛡️ Sudo konfigurieren
+# -----------------------------------------
+# Aktiviert sudo für wheel-Gruppe
+# im Zielsystem
+# =========================================
 konfiguriere_sudo() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde sudo (wheel) aktivieren"
+    warn "[DRY-RUN] würde sudo konfigurieren"
     return 0
   fi
 
-  log "Aktiviere sudo für wheel..."
+  local sudoers="/mnt/etc/sudoers"
 
-  sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /mnt/etc/sudoers
+  sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' "$sudoers"
+
+  # ❗ Validierung
+  arch-chroot /mnt visudo -c || {
+    error "sudoers ist ungültig!"
+    exit 1
+  }
 }
 
-# =========================
-# 🔒 Root sperren
-# =========================
-
+# =========================================
+# 🔒 Root-Zugang optional sperren
+# -----------------------------------------
+# Deaktiviert Root-Login für
+# erhöhte Systemsicherheit
+# =========================================
 sperre_root_optional() {
   if [[ "$DISABLE_ROOT" != "yes" ]]; then
     log "Root bleibt aktiv."
