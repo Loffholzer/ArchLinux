@@ -4,25 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      12_tools.sh
-# Zweck:     CLI Toolset
+# Zweck:     CLI-Werkzeuge installieren
 #
 # Aufgabe:
-# - installiert Standardtools
+# - installiert reproduzierbares Toolset
+# - ergänzt Netzwerk-, Such- und Archivtools
+# - initialisiert optionale Tool-Datenbanken
 #
 # Wichtig:
-# - optional, aber reproduzierbar
+# - optional, aber produktivitätsrelevant
+# - Paketliste muss deterministisch bleiben
+# - keine interaktiven Prompts zulassen
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. feste Paketliste
-# 2. keine interaktiven Prompts
+# 1. DRY_RUN respektieren
+# 2. Feste Paketliste verwenden
+# 3. Pacman nicht interaktiv ausführen
+# 4. Optionale Initialisierung darf warnen
 # =========================================
 
 # =========================================
-# 🧰 CLI-Tools Setup orchestrieren
+# 🧰 CLI-Tools ausführen
 # -----------------------------------------
-# Steuert Installation und Vorbereitung
-# moderner Kommandozeilen-Tools
+# Installiert definiertes Werkzeugset
+# → macht Zielsystem administrierbar
 # =========================================
 
 run_tools_setup() {
@@ -35,10 +41,10 @@ run_tools_setup() {
 }
 
 # =========================================
-# 📋 CLI-Toolset anzeigen
+# 📋 Tool-Plan anzeigen
 # -----------------------------------------
 # Zeigt geplante Tools nach Kategorien
-# für Transparenz vor Installation
+# → Sichtprüfung vor Paketinstallation
 # =========================================
 
 zeige_tools_plan() {
@@ -61,10 +67,10 @@ zeige_tools_plan() {
 }
 
 # =========================================
-# 📦 CLI-Tools installieren
+# 📦 Tools installieren
 # -----------------------------------------
-# Installiert definiertes Toolset und
-# initialisiert optionale Datenbanken
+# Installiert CLI-Pakete und aktualisiert tldr
+# → Fehler bei Kernpaketen bricht ab
 # =========================================
 
 installiere_tools() {

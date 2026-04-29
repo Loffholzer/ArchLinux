@@ -4,29 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      03_btrfs.sh
-# Zweck:     Dateisystem + Subvolumes
+# Zweck:     BTRFS-Dateisystem vorbereiten
 #
 # Aufgabe:
-# - erstellt BTRFS
-# - legt Subvolumes an
-# - mountet Struktur
+# - erstellt BTRFS auf ROOT_DEVICE
+# - legt Root/Home/Snapshot-Subvolumes an
+# - mountet Zielstruktur nach /mnt
 #
 # Wichtig:
-# - falsches Mount = Datenkorruption
+# - destruktiv bei mkfs
+# - falscher Mount = Installation ins falsche Ziel
+# - Subvolume-Fehler = Boot-/Recovery-Probleme
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. Mounts IMMER validieren
-# 2. Subvolumes prüfen bevor erstellen
-# 3. Optionen deterministisch setzen
-# 4. Kein stilles Überschreiben
+# 1. DRY_RUN respektieren
+# 2. Mounts immer validieren
+# 3. Subvolumes vor Nutzung prüfen
+# 4. Keine stillen Mount-Abweichungen
 # =========================================
 
 # =========================================
-# 🧩 BTRFS-Setup orchestrieren
+# 🧩 BTRFS-Setup ausführen
 # -----------------------------------------
-# Erstellt Dateisystem, Subvolumes und
-# mountet Struktur nach /mnt
+# Erstellt Dateisystem, Subvolumes und Mounts
+# → bereitet /mnt für pacstrap vor
 # =========================================
 
 run_btrfs_setup() {
@@ -43,10 +45,10 @@ run_btrfs_setup() {
 }
 
 # =========================================
-# 🔒 BTRFS-Variablen prüfen
+# 🔒 BTRFS-Eingaben prüfen
 # -----------------------------------------
-# Validiert Root-Device bevor
-# Dateisystemoperationen starten
+# Validiert ROOT_DEVICE
+# → stoppt vor falschem Dateisystemziel
 # =========================================
 
 pruefe_btrfs_variablen() {
@@ -58,10 +60,10 @@ pruefe_btrfs_variablen() {
 }
 
 # =========================================
-# 💾 SSD-Erkennung durchführen
+# 💾 SSD erkennen
 # -----------------------------------------
-# Erkennt Rotationsstatus zur Anpassung
-# optimaler BTRFS Mount-Optionen
+# Prüft Rotationsstatus des Zielgeräts
+# → steuert SSD-spezifische Mountoptionen
 # =========================================
 
 is_ssd() {
@@ -77,10 +79,10 @@ is_ssd() {
 }
 
 # =========================================
-# ⚙️ BTRFS Mount-Optionen setzen
+# ⚙️ BTRFS-Optionen setzen
 # -----------------------------------------
-# Definiert performante und sichere
-# Optionen abhängig vom Datenträger
+# Definiert deterministische Mountoptionen
+# → optimiert Verhalten für SSD/HDD
 # =========================================
 
 setze_btrfs_optionen() {
@@ -97,10 +99,10 @@ setze_btrfs_optionen() {
 }
 
 # =========================================
-# 📋 BTRFS-Layout anzeigen
+# 📋 BTRFS-Plan anzeigen
 # -----------------------------------------
-# Zeigt Subvolume-Struktur und geplante
-# Mountpoints für Transparenz
+# Zeigt Root-Gerät, Optionen und Subvolumes
+# → Sichtprüfung vor mkfs/mount
 # =========================================
 
 zeige_btrfs_plan() {
@@ -125,10 +127,10 @@ zeige_btrfs_plan() {
 }
 
 # =========================================
-# 💽 BTRFS-Dateisystem erstellen
+# 💽 BTRFS erstellen
 # -----------------------------------------
-# Initialisiert BTRFS auf Root-Device
-# nach vorheriger Signaturprüfung
+# Initialisiert ROOT_DEVICE als BTRFS
+# → destruktiv bei nicht vorhandenem BTRFS
 # =========================================
 
 erstelle_btrfs() {
@@ -152,10 +154,10 @@ erstelle_btrfs() {
 }
 
 # =========================================
-# 🧩 BTRFS-Subvolumes erstellen
+# 🧩 Subvolumes erstellen
 # -----------------------------------------
-# Erstellt strukturierte Subvolumes
-# für Root, Home und Snapshots
+# Legt @, @home und @snapshots an
+# → Grundlage für Boot, Home und Recovery
 # =========================================
 
 erstelle_subvolumes() {
@@ -191,10 +193,10 @@ erstelle_subvolumes() {
 }
 
 # =========================================
-# 🔍 Mount-Quelle validieren
+# 🔍 Mount-Quelle prüfen
 # -----------------------------------------
-# Prüft ob Mountpoint vom erwarteten
-# Blockdevice stammt (Fehlmontage-Schutz)
+# Vergleicht Mountpoint mit erwartetem Device
+# → verhindert Installation auf falschem Mount
 # =========================================
 
 validate_mount_source() {
@@ -216,10 +218,10 @@ validate_mount_source() {
 }
 
 # =========================================
-# 🧩 BTRFS Subvolume validieren
+# 🧩 Subvolume prüfen
 # -----------------------------------------
-# Stellt sicher, dass korrektes Subvolume
-# am Mountpoint aktiv ist
+# Prüft aktives BTRFS-Subvolume am Mountpoint
+# → verhindert falsche Root-/Home-Zuordnung
 # =========================================
 
 validate_btrfs_subvol() {
@@ -236,10 +238,10 @@ validate_btrfs_subvol() {
 }
 
 # =========================================
-# 📂 BTRFS-Subvolumes mounten
+# 📂 Subvolumes mounten
 # -----------------------------------------
-# Mountet Root, Home und Snapshots mit
-# validierten Optionen nach /mnt
+# Mountet @, @home und @snapshots nach /mnt
+# → erstellt finale Zielstruktur
 # =========================================
 
 mounte_btrfs() {

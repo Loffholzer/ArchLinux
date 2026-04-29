@@ -4,28 +4,32 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      08_bootloader.sh
-# Zweck:     Bootchain Einrichtung (Limine)
+# Zweck:     Bootchain mit Limine einrichten
 #
 # Aufgabe:
-# - installiert Kernel + Firmware
-# - erstellt initramfs
-# - richtet EFI Boot ein
-# - schreibt limine.conf
+# - installiert Kernel, Firmware und Boottools
+# - baut initramfs für Standard/LUKS
+# - installiert Limine auf EFI
+# - schreibt bootfähige limine.conf
 #
 # Wichtig:
-# - Fehler hier = System bootet NICHT
+# - Fehler hier = System bootet nicht
+# - falsche UUID/Cmdline = initramfs hängt
+# - fehlende EFI-Dateien = kein UEFI-Start
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. UUIDs IMMER validieren
-# 2. EFI Mount strikt prüfen
-# 3. initramfs MUSS erfolgreich sein
-# 4. Boot-Konfig deterministisch erzeugen
+# 1. DRY_RUN respektieren
+# 2. EFI-Mount strikt validieren
+# 3. UUIDs hart prüfen
+# 4. Bootartefakte nach Erstellung validieren
 # =========================================
 
-
 # =========================================
-# 🚀 Bootloader Setup orchestrieren
+# 🚀 Bootloader-Setup ausführen
+# -----------------------------------------
+# Installiert Kernel, initramfs und Limine
+# → macht Zielsystem UEFI-bootfähig
 # =========================================
 
 run_bootloader_setup() {
@@ -46,9 +50,11 @@ run_bootloader_setup() {
   success "Bootloader eingerichtet."
 }
 
-
 # =========================================
-# 🔒 Variablen validieren
+# 🔒 Bootloader-Eingaben prüfen
+# -----------------------------------------
+# Validiert EFI_PART, ROOT_DEVICE und /mnt
+# → stoppt vor falscher Bootchain
 # =========================================
 
 pruefe_bootloader_variablen() {
@@ -62,9 +68,11 @@ pruefe_bootloader_variablen() {
   fi
 }
 
-
 # =========================================
-# 📋 Plan anzeigen
+# 📋 Bootloader-Plan anzeigen
+# -----------------------------------------
+# Zeigt EFI, Root-Gerät und Bootloader
+# → Sichtprüfung vor Boot-Setup
 # =========================================
 
 zeige_bootloader_plan() {
@@ -80,9 +88,11 @@ zeige_bootloader_plan() {
   echo
 }
 
-
 # =========================================
-# 📂 EFI mounten (hart validiert)
+# 📂 EFI mounten
+# -----------------------------------------
+# Mountet EFI_PART nach /mnt/boot
+# → falscher Mount macht System unbootbar
 # =========================================
 
 mounte_efi() {
@@ -106,9 +116,11 @@ mounte_efi() {
   success "EFI gemountet."
 }
 
-
 # =========================================
-# 📦 Kernel + Boottools installieren
+# 📦 Kernel und Boottools installieren
+# -----------------------------------------
+# Installiert Kernel, Firmware, Limine, Memtest
+# → Grundlage für Boot und Recovery
 # =========================================
 
 installiere_kernel_und_boottools() {
@@ -130,9 +142,11 @@ installiere_kernel_und_boottools() {
   run_cmd arch-chroot /mnt pacman -S --noconfirm "${packages[@]}"
 }
 
-
 # =========================================
-# ⚙️ initramfs vorbereiten (vconsole)
+# ⚙️ vconsole für initramfs setzen
+# -----------------------------------------
+# Schreibt Keymap und Konsolenfont
+# → wichtig für LUKS-Passworteingabe
 # =========================================
 
 konfiguriere_vconsole_fuer_initramfs() {
@@ -149,9 +163,11 @@ FONT=${CONSOLE_FONT:-ter-v28n}
 EOF
 }
 
-
 # =========================================
-# ⚙️ mkinitcpio HOOKS setzen
+# ⚙️ mkinitcpio Hooks setzen
+# -----------------------------------------
+# Konfiguriert initramfs für Standard/LUKS
+# → falsche Hooks verhindern Root-Mount
 # =========================================
 
 konfiguriere_mkinitcpio() {
@@ -171,9 +187,11 @@ konfiguriere_mkinitcpio() {
   fi
 }
 
-
 # =========================================
-# 💥 initramfs bauen (CRITICAL)
+# 💥 initramfs bauen
+# -----------------------------------------
+# Erstellt initramfs für installierte Kernel
+# → fehlendes Image macht System unbootbar
 # =========================================
 
 baue_initramfs() {
@@ -182,18 +200,23 @@ baue_initramfs() {
     return 0
   fi
 
+  log "Baue initramfs..."
+
   run_cmd arch-chroot /mnt mkinitcpio -P
 
-  # HARTE VALIDIERUNG
   [[ -f /mnt/boot/initramfs-linux.img ]] || {
     error "initramfs fehlt → System nicht bootfähig"
     exit 1
   }
-}
 
+  success "initramfs erstellt."
+}
 
 # =========================================
 # 💾 Limine EFI installieren
+# -----------------------------------------
+# Kopiert BOOTX64.EFI auf die EFI-Partition
+# → Voraussetzung für UEFI-Fallback-Boot
 # =========================================
 
 installiere_limine_efi() {
@@ -215,9 +238,11 @@ installiere_limine_efi() {
   run_cmd cp "$src" "$target"
 }
 
-
 # =========================================
 # 🔍 Memtest erkennen
+# -----------------------------------------
+# Sucht installierte Memtest-EFI-Datei
+# → optionaler Recovery-/Diagnose-Eintrag
 # =========================================
 
 pruefe_memtest() {
@@ -231,14 +256,42 @@ pruefe_memtest() {
   export MEMTEST_PATH
 }
 
+# =========================================
+# 🔎 Root UUID ermitteln
+# -----------------------------------------
+# Nutzt bei LUKS die Basispartition,
+# sonst das Root-Dateisystem
+# =========================================
+
+get_root_uuid() {
+  local uuid=""
+
+  if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
+    guard_require_var ROOT_BASE_DEVICE
+    uuid="$(blkid -s UUID -o value "$ROOT_BASE_DEVICE")"
+  else
+    guard_require_var ROOT_DEVICE
+    uuid="$(blkid -s UUID -o value "$ROOT_DEVICE")"
+  fi
+
+  [[ -n "$uuid" ]] || {
+    error "Root UUID fehlt"
+    exit 1
+  }
+
+  echo "$uuid"
+}
 
 # =========================================
-# 🧠 Kernel CMDLINE bauen
+# 🧠 Kernel-Cmdline bauen
+# -----------------------------------------
+# Erstellt Root-/LUKS-Bootparameter
+# → falsche Cmdline verhindert Boot
 # =========================================
 
 build_cmdline() {
   local root_uuid
-  root_uuid="$(blkid -s UUID -o value "$ROOT_DEVICE")"
+  root_uuid="$(get_root_uuid)"
 
   [[ -n "$root_uuid" ]] || {
     error "ROOT UUID fehlt"
@@ -255,9 +308,11 @@ build_cmdline() {
   fi
 }
 
-
 # =========================================
-# 📝 limine.conf erstellen
+# 📝 Limine-Konfiguration schreiben
+# -----------------------------------------
+# Erstellt Bootmenü für Linux, LTS und Memtest
+# → zentrale Boot-Konfiguration
 # =========================================
 
 erstelle_limine_config() {
@@ -297,9 +352,11 @@ EOF
   fi
 }
 
-
 # =========================================
-# 🔥 Boot Setup final validieren
+# 🔥 Boot-Setup validieren
+# -----------------------------------------
+# Prüft Kernel, initramfs und EFI-Bootloader
+# → letzter Stop vor unbootbarem System
 # =========================================
 
 validiere_boot_setup() {

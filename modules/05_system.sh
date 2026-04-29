@@ -4,30 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      05_system.sh
-# Zweck:     Basis-Systemkonfiguration
+# Zweck:     Basissystem konfigurieren
 #
 # Aufgabe:
-# - fstab generieren (kritisch für Boot)
-# - Hostname setzen
-# - Locale konfigurieren
-# - Timezone setzen
-# - vconsole konfigurieren
+# - generiert und validiert fstab
+# - setzt Hostname, Locale und Zeitzone
+# - konfiguriert vconsole für TTY/initramfs
 #
 # Wichtig:
-# - falsche fstab = Boot hängt
-# - falsche Locale = System kaputt
+# - falsche fstab = Boot-Fail
+# - fehlender EFI-Eintrag = Kernel-Update-Risiko
+# - falsche Locale/Timezone = kaputte Systembasis
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. /mnt MUSS validiert sein
-# 2. fstab darf NICHT leer/kaputt sein
-# 3. locale-gen MUSS erfolgreich sein
-# 4. alle Dateien deterministisch schreiben
+# 1. DRY_RUN respektieren
+# 2. /mnt strikt validieren
+# 3. fstab hart prüfen
+# 4. Konfigurationsdateien deterministisch schreiben
 # =========================================
 
-
 # =========================================
-# 🚀 Systemkonfiguration orchestrieren
+# 🚀 Systemkonfiguration ausführen
+# -----------------------------------------
+# Schreibt fstab und Basiskonfiguration
+# → macht Zielsystem boot- und nutzbar
 # =========================================
 
 run_system_config() {
@@ -37,6 +38,7 @@ run_system_config() {
   zeige_system_plan
   validiere_mnt_konsistenz
   generiere_fstab
+  ensure_efi_in_fstab
   validiere_fstab
   konfiguriere_hostname
   konfiguriere_locale
@@ -46,9 +48,11 @@ run_system_config() {
   success "System konfiguriert."
 }
 
-
 # =========================================
-# 🔒 Variablen prüfen
+# 🔒 Systemwerte prüfen
+# -----------------------------------------
+# Validiert Hostname, Timezone, LANG und Locales
+# → stoppt vor defekter Systemkonfiguration
 # =========================================
 
 pruefe_system_variablen() {
@@ -66,9 +70,11 @@ pruefe_system_variablen() {
   fi
 }
 
-
 # =========================================
-# 📋 Plan anzeigen
+# 📋 Systemplan anzeigen
+# -----------------------------------------
+# Zeigt Hostname, Timezone und Locales
+# → Sichtprüfung vor Schreiben ins Zielsystem
 # =========================================
 
 zeige_system_plan() {
@@ -81,12 +87,11 @@ zeige_system_plan() {
   echo
 }
 
-
 # =========================================
 # 🔍 /mnt Konsistenz prüfen
 # -----------------------------------------
-# Verhindert Installation auf falschem
-# oder inkonsistentem Mount
+# Prüft BTRFS und Root-Subvolume
+# → verhindert Konfiguration am falschen Ziel
 # =========================================
 
 validiere_mnt_konsistenz() {
@@ -109,9 +114,11 @@ validiere_mnt_konsistenz() {
   }
 }
 
-
 # =========================================
 # 📄 fstab generieren
+# -----------------------------------------
+# Schreibt Mounttabelle aus aktuellen Mounts
+# → Grundlage für Boot und Dateisystem-Mounts
 # =========================================
 
 generiere_fstab() {
@@ -125,11 +132,52 @@ generiere_fstab() {
   run_cmd genfstab -U /mnt > /mnt/etc/fstab
 }
 
+# =========================================
+# 🧷 EFI fstab absichern
+# -----------------------------------------
+# Erzwingt persistenten /boot-EFI-Eintrag
+# → verhindert Boot-Probleme nach Updates
+# =========================================
+
+ensure_efi_in_fstab() {
+  local fstab="/mnt/etc/fstab"
+  local uuid
+
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde EFI-Eintrag in fstab sicherstellen"
+    return 0
+  fi
+
+  guard_require_var EFI_PART
+  guard_block_device "$EFI_PART"
+
+  [[ -s "$fstab" ]] || {
+    error "fstab fehlt oder leer"
+    exit 1
+  }
+
+  grep -qE '[[:space:]]/boot[[:space:]]' "$fstab" && {
+    log "EFI bereits in fstab"
+    return 0
+  }
+
+  uuid="$(blkid -s UUID -o value "$EFI_PART")"
+
+  [[ -n "$uuid" ]] || {
+    error "EFI UUID fehlt"
+    exit 1
+  }
+
+  printf 'UUID=%s  /boot  vfat  defaults  0 2\n' "$uuid" >> "$fstab"
+
+  success "EFI fstab fix angewendet"
+}
 
 # =========================================
-# 🔥 fstab validieren (CRITICAL)
+# 🔥 fstab validieren
 # -----------------------------------------
-# Verhindert Boot mit leerer oder falscher fstab
+# Prüft Root-Subvolume und EFI-Mount
+# → falsche fstab macht System unbootbar
 # =========================================
 
 validiere_fstab() {
@@ -156,9 +204,11 @@ validiere_fstab() {
   success "fstab validiert."
 }
 
-
 # =========================================
 # 🏷 Hostname setzen
+# -----------------------------------------
+# Schreibt /etc/hostname
+# → definiert lokalen Systemnamen
 # =========================================
 
 konfiguriere_hostname() {
@@ -170,9 +220,11 @@ konfiguriere_hostname() {
   echo "$HOSTNAME" > /mnt/etc/hostname
 }
 
-
 # =========================================
 # 🌐 Locale konfigurieren
+# -----------------------------------------
+# Aktiviert Locales und schreibt locale.conf
+# → fehlerhafte Locale bricht Systemtools
 # =========================================
 
 konfiguriere_locale() {
@@ -199,9 +251,11 @@ konfiguriere_locale() {
   }
 }
 
-
 # =========================================
 # 🕒 Timezone setzen
+# -----------------------------------------
+# Verlinkt /etc/localtime und setzt Hardware-Uhr
+# → verhindert falsche Systemzeit
 # =========================================
 
 konfiguriere_timezone() {
@@ -222,9 +276,11 @@ konfiguriere_timezone() {
   run_cmd arch-chroot /mnt hwclock --systohc
 }
 
-
 # =========================================
 # 🖥️ vconsole konfigurieren
+# -----------------------------------------
+# Schreibt Keymap und Konsolenfont
+# → wichtig für TTY und LUKS-Passworteingabe
 # =========================================
 
 konfiguriere_vconsole() {
@@ -240,3 +296,4 @@ KEYMAP=${KEYMAP}
 FONT=${CONSOLE_FONT:-ter-v28n}
 EOF
 }
+

@@ -4,24 +4,25 @@
 # 📦 Guard & Runtime Helper Bibliothek
 # -----------------------------------------
 # Name:      guard.sh
-# Zweck:     Sicherheits- und Ausführungs-Helper
+# Zweck:     Zentrale Sicherheitsprüfungen
 #
 # Aufgabe:
 # - validiert Pflichtvariablen
 # - prüft Blockdevices und Mountpoints
-# - schützt kritische Operationen
-# - kapselt sichere Befehlsausführung
+# - verhindert gefährliche Zielzustände
+# - kapselt DRY_RUN-sichere Ausführung
 #
 # Wichtig:
-# - KEINE destruktiven Aktionen direkt
-# - nur Schutzlogik und zentrale Wrapper
+# - keine destruktiven Aktionen direkt
+# - Guard-Fehler müssen hart abbrechen
+# - falsche Checks können Datenverlust erlauben
 # =========================================
-
 
 # =========================================
 # 🔒 Pflichtvariable prüfen
 # -----------------------------------------
-# Bricht ab wenn Variable fehlt oder leer ist
+# Bricht bei leerer Variable ab
+# → verhindert undefinierte Modulzustände
 # =========================================
 
 guard_require_var() {
@@ -33,11 +34,11 @@ guard_require_var() {
   }
 }
 
-
 # =========================================
-# 💽 Blockdevice validieren
+# 💽 Blockdevice prüfen
 # -----------------------------------------
-# Stellt sicher, dass Device existiert
+# Validiert vorhandenes Blockgerät
+# → stoppt vor falschem Device-Zugriff
 # =========================================
 
 guard_block_device() {
@@ -49,27 +50,34 @@ guard_block_device() {
   }
 }
 
-
 # =========================================
-# ⚠️ Device darf nicht gemountet sein
+# ⚠️ Mountstatus prüfen
 # -----------------------------------------
-# Verhindert Änderungen an aktiven Mounts
+# Verhindert Änderungen an gemounteten Devices
+# → schützt aktive Dateisysteme
 # =========================================
 
 guard_not_mounted() {
   local dev="$1"
 
-  if lsblk -no MOUNTPOINTS "$dev" | grep -q '/'; then
+  guard_block_device "$dev"
+
+  if findmnt -rn -S "$dev" >/dev/null 2>&1; then
+    error "Device ist gemountet: $dev"
+    exit 1
+  fi
+
+  if lsblk -rn -o NAME,MOUNTPOINTS "$dev" | awk '$2 != "" { found=1 } END { exit !found }'; then
     error "Device oder Partition ist gemountet: $dev"
     exit 1
   fi
 }
 
-
 # =========================================
 # 💣 Systemdisk schützen
 # -----------------------------------------
-# Verhindert Wipe des laufenden Systems
+# Erkennt Laufwerk des Live-Root-Systems
+# → verhindert Wipe des laufenden Systems
 # =========================================
 
 guard_not_system_disk() {
@@ -91,11 +99,11 @@ guard_not_system_disk() {
   fi
 }
 
-
 # =========================================
-# ⚠️ /mnt muss gemountet sein
+# ⚠️ /mnt prüfen
 # -----------------------------------------
-# Validiert Zielsystem-Mountpoint
+# Erzwingt gemountetes Zielsystem
+# → verhindert Installation ins Live-System
 # =========================================
 
 guard_mnt_mounted() {
@@ -105,11 +113,11 @@ guard_mnt_mounted() {
   }
 }
 
-
 # =========================================
-# 🔍 Mountpoint Quelle prüfen
+# 🔍 Mountquelle prüfen
 # -----------------------------------------
-# Verhindert falsches /mnt Target
+# Vergleicht Mountpoint mit erwartetem Device
+# → verhindert falsche Ziel-Mounts
 # =========================================
 
 guard_mountpoint_source() {
@@ -130,11 +138,11 @@ guard_mountpoint_source() {
   }
 }
 
-
 # =========================================
-# 🧪 Sicherer Command Runner
+# 🧪 Befehl sicher ausführen
 # -----------------------------------------
-# Führt Befehle nur bei DRY_RUN=false aus
+# Respektiert DRY_RUN und bricht bei Fehler ab
+# → zentraler Wrapper für kritische Commands
 # =========================================
 
 run_cmd() {

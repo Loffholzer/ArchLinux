@@ -7,29 +7,35 @@
 # Zweck:     Basissystem installieren
 #
 # Aufgabe:
-# - installiert base System via pacstrap
+# - installiert minimales Arch-System
+# - ergänzt BTRFS/LUKS-Basiswerkzeuge
+# - bereitet Zielsystem für Boot-Konfiguration vor
 #
 # Wichtig:
-# - benötigt korrekt gemountetes /mnt
+# - /mnt muss korrekt gemountet sein
+# - pacstrap-Fehler = unvollständiges System
+# - fehlende Pakete können Boot/Recovery brechen
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. /mnt MUSS validiert sein
-# 2. pacstrap darf nicht silent failen
+# 1. DRY_RUN respektieren
+# 2. /mnt vor pacstrap validieren
 # 3. Paketliste deterministisch halten
+# 4. pacstrap-Fehler hart abbrechen
 # =========================================
 
 # =========================================
-# 📦 Basissystem-Installation orchestrieren
+# 📦 Basissystem installieren
 # -----------------------------------------
-# Steuert Installation des minimalen
-# Arch-Systems nach /mnt
+# Orchestriert Prüfung, Plan und pacstrap
+# → erzeugt minimales Zielsystem unter /mnt
 # =========================================
 
 run_base_install() {
   header "04 - Basissystem"
 
   pruefe_base_variablen
+  pruefe_pacstrap_netwerk
   zeige_base_plan
   installiere_base
 
@@ -37,10 +43,10 @@ run_base_install() {
 }
 
 # =========================================
-# 🔒 Basis-System Voraussetzungen prüfen
+# 🔒 Base-Voraussetzungen prüfen
 # -----------------------------------------
-# Stellt sicher, dass /mnt korrekt
-# gemountet ist vor pacstrap
+# Validiert Ziel-Mountpoint /mnt
+# → verhindert Installation ins Live-System
 # =========================================
 
 pruefe_base_variablen() {
@@ -53,10 +59,10 @@ pruefe_base_variablen() {
 }
 
 # =========================================
-# 📋 Basis-Pakete anzeigen
+# 📋 Base-Plan anzeigen
 # -----------------------------------------
-# Zeigt geplante Pakete für das
-# minimale Arch-Grundsystem
+# Zeigt Basispakete für pacstrap
+# → Sichtprüfung vor Systeminstallation
 # =========================================
 
 zeige_base_plan() {
@@ -76,10 +82,29 @@ zeige_base_plan() {
 }
 
 # =========================================
-# 📦 Basissystem installieren
+# 🌐 Netzwerk vor pacstrap prüfen
 # -----------------------------------------
-# Führt pacstrap aus und installiert
-# Kernpakete ins Zielsystem
+# Prüft Arch-Repo-Erreichbarkeit
+# → verhindert halbe Installation ohne Netzwerk
+# =========================================
+
+pruefe_pacstrap_netwerk() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde Netzwerk vor pacstrap prüfen"
+    return 0
+  fi
+
+  ping -c 1 -W 3 archlinux.org >/dev/null 2>&1 || {
+    error "Kein Netzwerk oder archlinux.org nicht erreichbar."
+    exit 1
+  }
+}
+
+# =========================================
+# 📦 Base-Pakete installieren
+# -----------------------------------------
+# Installiert Kernpakete nach /mnt
+# → pacstrap-Fehler macht System unbrauchbar
 # =========================================
 
 installiere_base() {

@@ -4,27 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      15_network.sh
-# Zweck:     Netzwerk + Security Setup
+# Zweck:     Netzwerk und Firewall einrichten
 #
 # Aufgabe:
-# - installiert Netzwerk-Stack
-# - aktiviert sichere Defaults
-# - konfiguriert Firewall + SSH
+# - installiert NetworkManager, Avahi und firewalld
+# - konfiguriert mDNS und Firewall-Defaults
+# - installiert und härtet SSH optional
 #
 # Wichtig:
-# - kein offenes System nach Installation
-# - SSH sicher konfiguriert
+# - Firewall muss aktiv sein
+# - SSH darf nicht offen/unsicher bleiben
+# - falsche Dienste erhöhen Angriffsfläche
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. Firewall IMMER aktiv
-# 2. SSH niemals unsicher
-# 3. Dienste nur wenn nötig aktivieren
+# 1. DRY_RUN respektieren
+# 2. Firewall immer aktivieren
+# 3. SSH nur optional aktivieren
+# 4. Netzwerkdienste nach Setup validieren
 # =========================================
 
-
 # =========================================
-# 🚀 Netzwerk Setup orchestrieren
+# 🚀 Netzwerk-Setup ausführen
+# -----------------------------------------
+# Installiert Pakete, Firewall und Dienste
+# → stellt Netzwerk mit sicheren Defaults bereit
 # =========================================
 
 run_network_setup() {
@@ -42,9 +46,11 @@ run_network_setup() {
   success "Netzwerk sicher eingerichtet."
 }
 
-
 # =========================================
-# 🔒 Checks
+# 🔒 Netzwerk-Eingaben prüfen
+# -----------------------------------------
+# Validiert Zielsystem-Mount /mnt
+# → verhindert Konfiguration am falschen System
 # =========================================
 
 pruefe_network_variablen() {
@@ -53,9 +59,11 @@ pruefe_network_variablen() {
   fi
 }
 
-
 # =========================================
-# 📋 Plan anzeigen
+# 📋 Netzwerk-Plan anzeigen
+# -----------------------------------------
+# Zeigt Netzwerkstack, Firewall und SSH-Status
+# → Sichtprüfung vor Security-Änderungen
 # =========================================
 
 zeige_network_plan() {
@@ -68,9 +76,11 @@ zeige_network_plan() {
   echo
 }
 
-
 # =========================================
-# 📦 Pakete installieren
+# 📦 Netzwerk-Pakete installieren
+# -----------------------------------------
+# Installiert NetworkManager, mDNS und Firewall
+# → SSH nur bei aktivierter Option
 # =========================================
 
 installiere_network_pakete() {
@@ -91,9 +101,11 @@ installiere_network_pakete() {
   run_cmd arch-chroot /mnt pacman -S --noconfirm "${packages[@]}"
 }
 
-
 # =========================================
 # 🌐 mDNS konfigurieren
+# -----------------------------------------
+# Aktiviert mdns_minimal in nsswitch.conf
+# → ermöglicht lokale Hostnamenauflösung
 # =========================================
 
 konfiguriere_mdns() {
@@ -109,9 +121,11 @@ konfiguriere_mdns() {
   sed -i 's/^hosts:.*/hosts: files mymachines mdns_minimal [NOTFOUND=return] resolve dns myhostname/' "$conf"
 }
 
-
 # =========================================
-# 🔥 Firewall konfigurieren (SECURE DEFAULT)
+# 🔥 Firewall konfigurieren
+# -----------------------------------------
+# Setzt firewalld auf public/DROP
+# → erlaubt nur explizit freigegebene Dienste
 # =========================================
 
 konfiguriere_firewalld() {
@@ -122,24 +136,20 @@ konfiguriere_firewalld() {
 
   log "Konfiguriere firewalld (secure defaults)..."
 
-  # Default Zone = public (strenger als home)
-  arch-chroot /mnt firewall-offline-cmd --set-default-zone=public
+  run_cmd arch-chroot /mnt firewall-offline-cmd --set-default-zone=public
+  run_cmd arch-chroot /mnt firewall-offline-cmd --zone=public --set-target=DROP
+  run_cmd arch-chroot /mnt firewall-offline-cmd --zone=public --add-service=mdns
 
-  # Alles blockieren außer explizit erlaubt
-  arch-chroot /mnt firewall-offline-cmd --set-target=DROP
-
-  # mDNS erlauben (optional aber sinnvoll)
-  arch-chroot /mnt firewall-offline-cmd --add-service=mdns
-
-  # SSH nur wenn aktiviert
   if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
-    arch-chroot /mnt firewall-offline-cmd --add-service=ssh
+    run_cmd arch-chroot /mnt firewall-offline-cmd --zone=public --add-service=ssh
   fi
 }
 
-
 # =========================================
-# 🔐 SSH HARDENING
+# 🔐 SSH härten
+# -----------------------------------------
+# Deaktiviert root Login und begrenzt Auth
+# → reduziert Remote-Angriffsfläche
 # =========================================
 
 konfiguriere_ssh() {
@@ -152,25 +162,39 @@ konfiguriere_ssh() {
 
   local conf="/mnt/etc/ssh/sshd_config"
 
-  [[ -f "$conf" ]] || return 0
+  [[ -f "$conf" ]] || {
+    error "sshd_config nicht gefunden: $conf"
+    exit 1
+  }
 
   log "Härte SSH-Konfiguration..."
 
-  # Root Login deaktivieren
-  sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$conf"
+  sed -i -E 's/^[#[:space:]]*PermitRootLogin.*/PermitRootLogin no/' "$conf"
+  grep -qE '^PermitRootLogin[[:space:]]+no$' "$conf" || echo "PermitRootLogin no" >> "$conf"
 
-  # Passwort Login aktiv lassen (für Installer usability)
-  sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' "$conf"
+  sed -i -E 's/^[#[:space:]]*PasswordAuthentication.*/PasswordAuthentication yes/' "$conf"
+  grep -qE '^PasswordAuthentication[[:space:]]+yes$' "$conf" || echo "PasswordAuthentication yes" >> "$conf"
 
-  # zusätzliche Härtung
-  grep -q "^MaxAuthTries" "$conf" || echo "MaxAuthTries 3" >> "$conf"
-  grep -q "^LoginGraceTime" "$conf" || echo "LoginGraceTime 30" >> "$conf"
-  grep -q "^X11Forwarding" "$conf" || echo "X11Forwarding no" >> "$conf"
+  sed -i -E 's/^[#[:space:]]*MaxAuthTries.*/MaxAuthTries 3/' "$conf"
+  grep -qE '^MaxAuthTries[[:space:]]+3$' "$conf" || echo "MaxAuthTries 3" >> "$conf"
+
+  sed -i -E 's/^[#[:space:]]*LoginGraceTime.*/LoginGraceTime 30/' "$conf"
+  grep -qE '^LoginGraceTime[[:space:]]+30$' "$conf" || echo "LoginGraceTime 30" >> "$conf"
+
+  sed -i -E 's/^[#[:space:]]*X11Forwarding.*/X11Forwarding no/' "$conf"
+  grep -qE '^X11Forwarding[[:space:]]+no$' "$conf" || echo "X11Forwarding no" >> "$conf"
+
+  arch-chroot /mnt sshd -t || {
+    error "sshd_config ist ungültig"
+    exit 1
+  }
 }
-
 
 # =========================================
 # 🔌 Dienste aktivieren
+# -----------------------------------------
+# Aktiviert Netzwerk-, Firewall- und mDNS-Dienste
+# → SSH nur bei INSTALL_SSH=yes
 # =========================================
 
 aktiviere_network_services() {
@@ -187,9 +211,11 @@ aktiviere_network_services() {
     arch-chroot /mnt systemctl enable sshd
 }
 
-
 # =========================================
-# 🧪 Validierung
+# 🧪 Netzwerk validieren
+# -----------------------------------------
+# Prüft aktivierte Netzwerk- und Firewall-Dienste
+# → stoppt bei unsicherem Zielsystem
 # =========================================
 
 validiere_network_setup() {

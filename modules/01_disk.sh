@@ -4,30 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      01_disk.sh
-# Zweck:     Laufwerksvorbereitung
+# Zweck:     Laufwerk vorbereiten
 #
 # Aufgabe:
-# - löscht vorhandene Daten
-# - erstellt Partitionstabelle
-# - erzeugt EFI + Root Partition
+# - validiert Zielgerät
+# - löscht alte Signaturen
+# - erstellt GPT + EFI + Root-Partition
 #
 # Wichtig:
-# - HOCH DESTRUKTIV
+# - destruktiv
 # - falsches Device = Datenverlust
+# - Device muss vor jedem Wipe erneut geprüft werden
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. DRY_RUN zwingend für alle Aktionen
-# 2. IMMER Bestätigung vor wipe
-# 3. Nur validierte Blockdevices nutzen
-# 4. Keine impliziten Device-Namen (/dev/sdX)
+# 1. DRY_RUN respektieren
+# 2. Explizite Löschbestätigung erzwingen
+# 3. Nur validierte Blockdevices ändern
+# 4. Keine impliziten Device-Annahmen
 # =========================================
 
 # =========================================
-# 💣 Disk-Setup orchestrieren
+# 💣 Disk-Setup ausführen
 # -----------------------------------------
-# Führt alle Schritte zur sicheren
-# Laufwerksvorbereitung aus
+# Orchestriert Prüfung, Bestätigung,
+# Partitionierung und EFI-Formatierung
 # =========================================
 
 run_disk_setup() {
@@ -44,10 +45,47 @@ run_disk_setup() {
 }
 
 # =========================================
-# 🔗 Stabile Device-Pfade ermitteln
+# 🧬 Disk erneut verifizieren
 # -----------------------------------------
-# Findet persistenten /dev/disk/by-id Pfad
-# zur Vermeidung von Device-Race-Conditions
+# Prüft vor destruktiven Aktionen,
+# dass DISK unverändert ist
+# =========================================
+
+verify_disk_identity() {
+  local current
+
+  guard_require_var DISK
+
+  current="$(readlink -f "$DISK")"
+
+  [[ -b "$current" ]] || {
+    error "Zielgerät existiert nicht mehr: $DISK"
+    exit 1
+  }
+
+  [[ "$current" == "$DISK" ]] || {
+    error "Device-Pfad hat sich geändert: $DISK → $current"
+    exit 1
+  }
+
+  if [[ -n "${DISK_BY_ID:-}" ]]; then
+    [[ -e "$DISK_BY_ID" ]] || {
+      error "Stabiler Device-Pfad existiert nicht mehr: $DISK_BY_ID"
+      exit 1
+    }
+
+    [[ "$(readlink -f "$DISK_BY_ID")" == "$DISK" ]] || {
+      error "Device-Identität stimmt nicht mehr mit DISK_BY_ID überein"
+      exit 1
+    }
+  fi
+}
+
+# =========================================
+# 🔗 Stabilen Device-Pfad finden
+# -----------------------------------------
+# Ermittelt /dev/disk/by-id für DISK
+# → reduziert Risiko durch Device-Renaming
 # =========================================
 
 disk_by_id_path() {
@@ -67,10 +105,10 @@ disk_by_id_path() {
 }
 
 # =========================================
-# 🔒 Disk-Sicherheitsprüfungen durchführen
+# 🔒 Disk-Eingaben prüfen
 # -----------------------------------------
-# Validiert Zielgerät, Profil und schützt
-# vor laufenden oder gemounteten Devices
+# Validiert Zielgerät, Profil und Mountstatus
+# → stoppt bei Systemdisk oder aktivem Mount
 # =========================================
 
 pruefe_disk_variablen() {
@@ -106,10 +144,10 @@ pruefe_disk_variablen() {
 }
 
 # =========================================
-# 📋 Disk-Layout anzeigen
+# 📋 Disk-Plan anzeigen
 # -----------------------------------------
-# Zeigt geplante Partitionierung und
-# aktuellen Laufwerkszustand an
+# Zeigt Zielgerät und geplantes Layout
+# → letzte Sichtprüfung vor Datenverlust
 # =========================================
 
 zeige_disk_plan() {
@@ -134,10 +172,10 @@ zeige_disk_plan() {
 }
 
 # =========================================
-# ⚠️ Destruktive Disk-Aktion bestätigen
+# ⚠️ Datenlöschung bestätigen
 # -----------------------------------------
-# Erzwingt explizite Bestätigung bevor
-# Daten unwiderruflich gelöscht werden
+# Erzwingt exakte Device- und Löschphrase
+# → schützt vor versehentlichem Wipe
 # =========================================
 
 bestaetige_disk_zerstoererisch() {
@@ -195,31 +233,39 @@ partitioniere_disk() {
   sgdisk --backup="$gpt_backup" "$DISK" 2>/dev/null || warn "GPT-Backup nicht möglich oder nicht vorhanden."
 
   log "Lösche alte Signaturen auf ${DISK}..."
+  verify_disk_identity
   run_cmd wipefs -af "$DISK"
 
   log "Erstelle neue GPT-Partitionstabelle..."
+  verify_disk_identity
   run_cmd parted -s "$DISK" mklabel gpt
 
   log "Erstelle EFI-Partition..."
+  verify_disk_identity
   run_cmd parted -s "$DISK" mkpart ESP fat32 1MiB 1025MiB
+  verify_disk_identity
   run_cmd parted -s "$DISK" set 1 esp on
+  verify_disk_identity
   run_cmd parted -s "$DISK" set 1 boot on
 
   log "Erstelle ROOT-Partition..."
+  verify_disk_identity
   run_cmd parted -s "$DISK" mkpart ROOT 1025MiB 100%
 
   log "Informiere Kernel über neue Partitionen..."
+  verify_disk_identity
   run_cmd partprobe "$DISK"
+  verify_disk_identity
   run_cmd udevadm settle
 
   success "Partitionierung abgeschlossen."
 }
 
 # =========================================
-# 🔍 Partitionen ermitteln
+# 🔍 Partitionen ableiten
 # -----------------------------------------
-# Leitet EFI- und Root-Partition aus
-# dem gewählten Zielgerät ab
+# Bestimmt EFI_PART und ROOT_PART aus DISK
+# → berücksichtigt NVMe/mmcblk Namensschema
 # =========================================
 
 ermittle_partitionen() {
@@ -250,10 +296,10 @@ ermittle_partitionen() {
 }
 
 # =========================================
-# 🧹 EFI-Partition formatieren
+# 🧹 EFI formatieren
 # -----------------------------------------
-# Formatiert die EFI-Systempartition
-# als FAT32 für UEFI-Boot
+# Erstellt FAT32-Dateisystem auf EFI_PART
+# → Voraussetzung für UEFI-Boot
 # =========================================
 
 formatiere_efi() {
@@ -275,3 +321,5 @@ formatiere_efi() {
 
   success "EFI-Partition formatiert: ${EFI_PART}"
 }
+
+

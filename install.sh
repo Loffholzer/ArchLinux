@@ -4,34 +4,34 @@
 # 📦 Arch Installer Controller
 # -----------------------------------------
 # Name:      install.sh
-# Zweck:     Hauptsteuerung der Installation
+# Zweck:     Installationspipeline steuern
 #
 # Aufgabe:
-# - lädt Konfiguration
-# - orchestriert alle Module
-# - steuert Reihenfolge und Ablauf
+# - lädt Bibliotheken und Konfiguration
+# - führt Module in fester Reihenfolge aus
+# - schreibt State und Audit-Log
 #
 # Wichtig:
-# - enthält KEINE Installationslogik
-# - ist deterministisch und reproduzierbar
-# - zentrale Fehler- und Ablaufkontrolle
+# - keine Installationslogik im Controller
+# - Fehler müssen zentral abbrechen
+# - Cleanup darf keine fremden Ressourcen zerstören
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. DRY-RUN Pflicht für alle Module
-# 2. Keine destruktive Logik im Controller
-# 3. Module sind isoliert und austauschbar
-# 4. Jeder Schritt muss reproduzierbar sein
-# 5. Logging + State-Tracking verpflichtend
+# 1. DRY_RUN global respektieren
+# 2. Module isoliert ausführen
+# 3. State-Tracking bei jedem Modul
+# 4. Cleanup defensiv halten
+# 5. Keine destruktive Logik im Controller
 # =========================================
 
 set -euo pipefail
 
 # =========================================
-# ⚙️ Globale Einstellungen
+# ⚙️ Globale Flags setzen
 # -----------------------------------------
-# Definiert Sicherheitsmodus und AUTO_MODE
-# für den gesamten Installationslauf
+# Definiert DRY_RUN, AUTO_MODE und ALLOW_EXEC
+# → steuert Sicherheitsmodus aller Module
 # =========================================
 
 DRY_RUN=false
@@ -39,10 +39,10 @@ AUTO_MODE=false
 ALLOW_EXEC=false
 
 # =========================================
-# 📁 Pfade bestimmen
+# 📁 Projektpfade bestimmen
 # -----------------------------------------
 # Ermittelt Script- und Modulverzeichnis
-# unabhängig vom aktuellen Arbeitsordner
+# → macht Aufrufpfad unabhängig
 # =========================================
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,8 +53,8 @@ export DRY_RUN AUTO_MODE ALLOW_EXEC SCRIPT_DIR MODULE_DIR
 # =========================================
 # 📦 Bibliotheken laden
 # -----------------------------------------
-# Lädt UI- und Guard-Funktionen vor
-# allen Modulen
+# Lädt UI- und Guard-Helfer
+# → Voraussetzung für Logging und Checks
 # =========================================
 
 source "$SCRIPT_DIR/lib/ui.sh"
@@ -63,17 +63,17 @@ source "$SCRIPT_DIR/lib/guard.sh"
 # =========================================
 # 📦 Config-Modul laden
 # -----------------------------------------
-# Lädt Konfigurationslogik und initiale
-# Hardware-Erkennung
+# Lädt Eingabe- und Hardware-Erkennung
+# → stellt Konfigurationsfunktionen bereit
 # =========================================
 
 source "$MODULE_DIR/00_config.sh"
 
 # =========================================
-# 🧱 Runtime-Verzeichnis initialisieren
+# 🧱 Runtime initialisieren
 # -----------------------------------------
-# Erstellt temporäres Arbeitsverzeichnis
-# für Logs und Installationsstatus
+# Erstellt Run-, State- und Log-Dateien
+# → Grundlage für Audit und Recovery
 # =========================================
 
 init_runtime() {
@@ -90,8 +90,8 @@ init_runtime() {
 # =========================================
 # 🧾 Audit-Log schreiben
 # -----------------------------------------
-# Schreibt strukturierte Zeitstempel-Logs
-# für Debugging und Post-Mortem Analyse
+# Schreibt Zeitstempel ins Logfile
+# → ermöglicht Fehleranalyse nach Abbruch
 # =========================================
 
 log_to_file() {
@@ -103,10 +103,10 @@ log_to_file() {
 }
 
 # =========================================
-# 🔁 Installationsstatus setzen
+# 🔁 State setzen
 # -----------------------------------------
-# Speichert aktuellen Fortschritt für
-# Resume / Recovery Szenarien
+# Speichert aktuellen Installationsstatus
+# → macht Fortschritt nachvollziehbar
 # =========================================
 
 set_state() {
@@ -123,10 +123,10 @@ set_state() {
 }
 
 # =========================================
-# 🔎 Installationsstatus lesen
+# 🔎 State lesen
 # -----------------------------------------
-# Liefert zuletzt gespeicherten Status
-# für Wiederaufnahme der Installation
+# Gibt zuletzt gespeicherten Status aus
+# → Vorbereitung für spätere Resume-Logik
 # =========================================
 
 get_state() {
@@ -135,22 +135,36 @@ get_state() {
 }
 
 # =========================================
-# 🧹 Global Cleanup (Exit Trap)
+# 🧹 Cleanup ausführen
 # -----------------------------------------
-# Räumt Mounts und LUKS-Mapper auf
-# bei Fehler oder Abbruch
+# Räumt /mnt und cryptroot defensiv auf
+# → verhindert hängende Mounts/Mapper
 # =========================================
 
 cleanup() {
   warn "Cleanup läuft..."
   log_to_file "CLEANUP start"
 
+  if mountpoint -q /mnt/.snapshots; then
+    umount /mnt/.snapshots || warn "Konnte /mnt/.snapshots nicht unmounten."
+  fi
+
+  if mountpoint -q /mnt/home; then
+    umount /mnt/home || warn "Konnte /mnt/home nicht unmounten."
+  fi
+
+  if mountpoint -q /mnt/boot; then
+    umount /mnt/boot || warn "Konnte /mnt/boot nicht unmounten."
+  fi
+
   if mountpoint -q /mnt; then
-    umount -R /mnt || warn "Konnte /mnt nicht vollständig unmounten."
+    umount /mnt || warn "Konnte /mnt nicht unmounten."
   fi
 
   if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
-    cryptsetup close "$ROOT_MAPPER_NAME" || warn "Konnte LUKS-Mapper nicht schließen: ${ROOT_MAPPER_NAME}"
+    if cryptsetup status "$ROOT_MAPPER_NAME" >/dev/null 2>&1; then
+      cryptsetup close "$ROOT_MAPPER_NAME" || warn "Konnte LUKS-Mapper nicht schließen: ${ROOT_MAPPER_NAME}"
+    fi
   fi
 
   log_to_file "CLEANUP done"
@@ -159,10 +173,10 @@ cleanup() {
 trap cleanup EXIT
 
 # =========================================
-# ▶ Modul sicher ausführen
+# ▶ Modul ausführen
 # -----------------------------------------
-# Lädt Modul, validiert Funktion und
-# trackt Status + Logging
+# Lädt Modul, prüft Funktion und trackt State
+# → kapselt Modulstart deterministisch
 # =========================================
 
 run_module() {
@@ -193,6 +207,15 @@ run_module() {
     exit 1
   fi
 
+  local last_state
+  last_state="$(get_state)"
+
+  # 🔥 Resume-Logik
+  if [[ "$last_state" == done:${module} ]]; then
+    success "Überspringe ${module} (bereits erledigt)"
+    return 0
+  fi
+
   set_state "running:${module}"
 
   "$function_name"
@@ -204,21 +227,11 @@ run_module() {
 # =========================================
 # 🚀 Installationspipeline ausführen
 # -----------------------------------------
-# Führt alle Module in definierter
-# Reihenfolge deterministisch aus
+# Führt Module in definierter Reihenfolge aus
+# → bestimmt reproduzierbaren Installationsablauf
 # =========================================
 
 run_install() {
-  header "Installationsplan"
-
-  run_module "01_disk.sh" "run_disk_setup"
-  run_module "02_encryption.sh" "run_encryption_setup"
-  run_module "03_btrfs.sh" "run_btrfs_setup"
-  run_module "04_base.sh" "run_base_install"
-  run_module "08_bootloader.sh" "run_bootloader_setup"
-  run_module "05_system.sh" "run_system_config"
-  run_module "06_perf.sh" "run_perf_setup"
-  run_module "07_snapshots.sh" "run_snapshot_setup"
   run_module "09_user.sh" "run_user_setup"
   run_module "10_snapshot_boot.sh" "run_snapshot_boot_setup"
   run_module "15_network.sh" "run_network_setup"
@@ -234,10 +247,10 @@ run_install() {
 }
 
 # =========================================
-# 🔐 Finales System-Hardening
+# 🔐 Finales Hardening ausführen
 # -----------------------------------------
-# Entfernt temporäre Rechte und
-# bereinigt Installer-Artefakte
+# Entfernt temporäre Installer-Sudo-Rechte
+# → verhindert dauerhaftes NOPASSWD-Sudo
 # =========================================
 
 run_final_hardening() {
@@ -257,10 +270,10 @@ run_final_hardening() {
 }
 
 # =========================================
-# 🧠 Hauptablauf steuern
+# 🧠 Einstiegspunkt ausführen
 # -----------------------------------------
-# Einstiegspunkt: initialisiert Runtime,
-# validiert Config und startet Installation
+# Initialisiert Runtime, Config und Pipeline
+# → startet kontrollierte Installation
 # =========================================
 
 main() {

@@ -4,28 +4,32 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      09_user.sh
-# Zweck:     Benutzerverwaltung
+# Zweck:     Benutzer und Rechte einrichten
 #
 # Aufgabe:
-# - erstellt User
-# - setzt Passwort
-# - konfiguriert sudo
+# - erstellt normalen Benutzer
+# - setzt Benutzerpasswort
+# - aktiviert sudo für wheel
+# - sperrt root optional
 #
 # Wichtig:
 # - sicherheitskritisch
+# - Passwort darf nie geloggt werden
+# - falsche sudoers = kein Admin-Zugriff
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. Passwörter nie loggen
-# 2. sudo sauber konfigurieren
-# 3. root optional sperren
+# 1. DRY_RUN respektieren
+# 2. Passwörter nie ausgeben
+# 3. sudoers nach Änderung validieren
+# 4. Root-Zugang bewusst behandeln
 # =========================================
 
 # =========================================
-# 👤 Benutzer-Setup orchestrieren
+# 👤 Benutzer-Setup ausführen
 # -----------------------------------------
-# Steuert Erstellung des Users,
-# Passwort und Rechtekonfiguration
+# Erstellt User, Passwort und sudo-Rechte
+# → stellt administrativen Zugriff sicher
 # =========================================
 
 run_user_setup() {
@@ -42,10 +46,10 @@ run_user_setup() {
 }
 
 # =========================================
-# 🔒 Benutzer-Variablen prüfen
+# 🔒 Benutzer-Eingaben prüfen
 # -----------------------------------------
-# Validiert Username, Passwort und
-# gemountetes Zielsystem
+# Validiert USERNAME, USER_PASSWORD und /mnt
+# → stoppt vor defekter User-Anlage
 # =========================================
 
 pruefe_user_variablen() {
@@ -61,10 +65,10 @@ pruefe_user_variablen() {
 }
 
 # =========================================
-# 📋 Benutzerkonfiguration anzeigen
+# 📋 Benutzer-Plan anzeigen
 # -----------------------------------------
-# Zeigt geplanten User, sudo und
-# Root-Status vor Anwendung
+# Zeigt Benutzer, sudo und Root-Status
+# → Sichtprüfung vor Rechteänderungen
 # =========================================
 
 zeige_user_plan() {
@@ -82,8 +86,8 @@ zeige_user_plan() {
 # =========================================
 # 👤 Benutzer erstellen
 # -----------------------------------------
-# Legt neuen User mit Home-Verzeichnis
-# und Gruppenmitgliedschaft an
+# Legt User mit Home und wheel-Gruppe an
+# → Voraussetzung für Login und sudo
 # =========================================
 
 erstelle_user() {
@@ -104,10 +108,10 @@ erstelle_user() {
 }
 
 # =========================================
-# 🔐 Benutzer-Passwort setzen
+# 🔐 Passwort setzen
 # -----------------------------------------
-# Setzt Passwort im Zielsystem
-# via chpasswd
+# Setzt Benutzerpasswort via chpasswd
+# → Secret darf niemals geloggt werden
 # =========================================
 
 setze_passwoerter() {
@@ -124,8 +128,8 @@ setze_passwoerter() {
 # =========================================
 # 🛡️ Sudo konfigurieren
 # -----------------------------------------
-# Aktiviert sudo für wheel-Gruppe
-# im Zielsystem
+# Aktiviert wheel-Sudo und prüft sudoers
+# → falsche sudoers sperrt Admin-Zugriff aus
 # =========================================
 
 konfiguriere_sudo() {
@@ -146,10 +150,10 @@ konfiguriere_sudo() {
 }
 
 # =========================================
-# 🔒 Root-Zugang optional sperren
+# 🔒 Root optional sperren
 # -----------------------------------------
-# Deaktiviert Root-Login für
-# erhöhte Systemsicherheit
+# Sperrt root-Login bei DISABLE_ROOT=yes
+# → reduziert Angriffsfläche
 # =========================================
 
 sperre_root_optional() {

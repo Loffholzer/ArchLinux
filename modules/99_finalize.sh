@@ -4,26 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      99_finalize.sh
-# Zweck:     Finalisierung
+# Zweck:     Installation finalisieren
 #
 # Aufgabe:
-# - finaler initramfs Build
-# - Abschluss der Installation
+# - baut initramfs final neu
+# - prüft letzten bootkritischen Schritt
+# - schließt Installationspipeline ab
 #
 # Wichtig:
 # - letzter Schritt vor Reboot
+# - mkinitcpio-Fehler = System nicht bootfähig
+# - Erfolg muss hart validierbar sein
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. Fehler hier = System nicht bootfähig
-# 2. MUSS erfolgreich sein
+# 1. DRY_RUN respektieren
+# 2. mkinitcpio-Fehler hart behandeln
+# 3. Keine stillen Fehler erlauben
+# 4. Bootartefakte nach Build prüfen
 # =========================================
 
 # =========================================
-# 🧱 Finalisierung durchführen
+# 🧱 Finalisierung ausführen
 # -----------------------------------------
-# Baut finale initramfs und stellt sicher,
-# dass das System bootfähig ist
+# Baut initramfs final neu
+# → letzter bootkritischer Schritt vor Reboot
 # =========================================
 
 run_finalize() {
@@ -36,14 +41,17 @@ run_finalize() {
 
   log "Finaler initramfs Build..."
 
-  # 🔥 doppelt für Sicherheit
-  arch-chroot /mnt mkinitcpio -P || {
-    warn "Retry mkinitcpio..."
-    arch-chroot /mnt mkinitcpio -P || {
-      error "mkinitcpio endgültig fehlgeschlagen."
-      exit 1
-    }
+  run_cmd arch-chroot /mnt mkinitcpio -P
+
+  [[ -f /mnt/boot/initramfs-linux.img ]] || {
+    error "Finales initramfs-linux.img fehlt → System nicht bootfähig"
+    exit 1
   }
 
-  success "Initramfs final erstellt."
+  [[ -f /mnt/boot/initramfs-linux-lts.img ]] || {
+    error "Finales initramfs-linux-lts.img fehlt → LTS-Boot nicht möglich"
+    exit 1
+  }
+
+  success "Initramfs final erstellt und validiert."
 }

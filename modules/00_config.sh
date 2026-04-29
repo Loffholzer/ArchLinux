@@ -7,20 +7,21 @@
 # Zweck:     Benutzerkonfiguration erfassen
 #
 # Aufgabe:
-# - sammelt alle Eingaben
-# - validiert Werte
-# - bestätigt Konfiguration
+# - sammelt Installationsparameter
+# - validiert Eingaben vor destruktiven Schritten
+# - exportiert Konfiguration für alle Module
 #
 # Wichtig:
-# - KEINE destruktiven Operationen
-# - Grundlage für alle weiteren Module
+# - keine Systemänderungen
+# - AUTO_MODE nur im DRY_RUN zulässig
+# - falsche Werte können Datenverlust/Boot-Fail auslösen
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. Keine Systemänderungen
+# 1. Keine destruktiven Aktionen
 # 2. Eingaben immer validieren
-# 3. Defaults müssen sicher sein
-# 4. AUTO_MODE nur mit DRY_RUN erlaubt
+# 3. Sichere Defaults erzwingen
+# 4. Secrets nie ausgeben oder loggen
 # =========================================
 
 # =========================
@@ -33,10 +34,10 @@ declare -a LOCALES=()
 CONSOLE_FONT="${CONSOLE_FONT:-ter-v28n}"
 
 # =========================================
-# 🤖 Default-Konfiguration setzen (AUTO_MODE)
+# 🤖 AUTO_MODE Defaults setzen
 # -----------------------------------------
-# Setzt sichere Standardwerte für automatischen
-# Ablauf ohne Benutzerinteraktion (nur DRY_RUN)
+# Setzt Testwerte für nicht-interaktive Runs
+# → nur mit DRY_RUN sicher zulässig
 # =========================================
 
 set_default_config() {
@@ -75,8 +76,8 @@ set_default_config() {
 # =========================================
 # 📤 Konfiguration exportieren
 # -----------------------------------------
-# Exportiert alle Variablen für Module,
-# damit sie global verfügbar sind
+# Macht validierte Werte für Module verfügbar
+# → verhindert implizite/fehlende Parameter
 # =========================================
 
 export_config() {
@@ -92,8 +93,8 @@ export_config() {
 # =========================================
 # ❓ Ja/Nein Eingabe abfragen
 # -----------------------------------------
-# Standardisierte Benutzerabfrage mit
-# robuster Eingabevalidierung
+# Normalisiert Benutzerantworten auf yes/no
+# → verhindert mehrdeutige Entscheidungen
 # =========================================
 
 ask_yes_no() {
@@ -123,8 +124,8 @@ ask_yes_no() {
 # =========================================
 # 🔒 Root-Rechte prüfen
 # -----------------------------------------
-# Stellt sicher, dass das Script mit
-# administrativen Rechten läuft
+# Erzwingt Ausführung als root
+# → verhindert halbe Installation durch Rechtefehler
 # =========================================
 
 check_root() {
@@ -139,8 +140,8 @@ check_root() {
 # =========================================
 # 🖥️ UEFI-Modus prüfen
 # -----------------------------------------
-# Verhindert Installation auf nicht
-# unterstützten BIOS-Systemen
+# Bricht auf BIOS/Legacy-Systemen ab
+# → Bootloader-Setup ist nur für UEFI gebaut
 # =========================================
 
 check_uefi() {
@@ -155,8 +156,8 @@ check_uefi() {
 # =========================================
 # 🔤 Hostname validieren
 # -----------------------------------------
-# Prüft RFC-konformen Hostnamen zur
-# Vermeidung späterer Netzwerkprobleme
+# Prüft Hostname auf sichere Zeichen
+# → verhindert spätere Netzwerk-/Configfehler
 # =========================================
 
 validate_hostname_value() {
@@ -166,8 +167,8 @@ validate_hostname_value() {
 # =========================================
 # 👤 Benutzername validieren
 # -----------------------------------------
-# Validiert Username gegen Linux-
-# Konventionen und Sicherheitsregeln
+# Prüft Linux-kompatiblen Usernamen
+# → verhindert fehlerhafte User-Erstellung
 # =========================================
 
 validate_username_value() {
@@ -177,8 +178,8 @@ validate_username_value() {
 # =========================================
 # ⌨️ Tastaturlayout auswählen
 # -----------------------------------------
-# Ermöglicht Auswahl oder Suche eines
-# gültigen Keymaps mit Fallback
+# Setzt gültige Keymap für Live-System
+# → verhindert falsche Passworteingaben
 # =========================================
 
 select_keyboard() {
@@ -275,10 +276,10 @@ select_keyboard() {
 }
 
 # =========================================
-# 🌍 Zeitzone automatisch erkennen
+# 🌍 Zeitzone erkennen
 # -----------------------------------------
-# Versucht Zeitzone via IP-Service zu
-# bestimmen (optional, nicht kritisch)
+# Erkennt Timezone optional per IP-Service
+# → Fallback bleibt manuelle Auswahl
 # =========================================
 
 detect_timezone() {
@@ -297,8 +298,8 @@ detect_timezone() {
 # =========================================
 # 🔍 Zeitzone manuell suchen
 # -----------------------------------------
-# Interaktive Suche mit begrenzten
-# Ergebnissen zur besseren UX
+# Sucht gültige systemd-Timezones
+# → verhindert ungültige /etc/localtime Ziele
 # =========================================
 
 select_timezone_manual() {
@@ -355,8 +356,8 @@ select_timezone_manual() {
 # =========================================
 # 🌍 Zeitzone auswählen
 # -----------------------------------------
-# Kombiniert automatische Erkennung
-# mit manuellem Fallback
+# Kombiniert Auto-Erkennung und Suche
+# → setzt validierte System-Zeitzone
 # =========================================
 
 select_timezone() {
@@ -416,8 +417,8 @@ select_timezone() {
 # =========================================
 # 🌐 Locale auswählen
 # -----------------------------------------
-# Setzt Systemsprache mit sicherem
-# Default (en_US.UTF-8 immer vorhanden)
+# Wählt Systemsprache mit en_US Fallback
+# → verhindert kaputte Locale-Konfiguration
 # =========================================
 
 select_locale() {
@@ -540,10 +541,10 @@ select_locale_manual() {
 }
 
 # =========================================
-# 💽 Ziellaufwerk auswählen
+# 🔍 Locale manuell suchen
 # -----------------------------------------
-# Listet verfügbare Disks und verhindert
-# ungültige oder leere Auswahl
+# Wählt vorhandene UTF-8 Locale aus locale.gen
+# → verhindert ungültige locale-gen Einträge
 # =========================================
 
 select_disk() {
@@ -583,8 +584,8 @@ select_disk() {
 # =========================================
 # 🧩 Installationsprofil auswählen
 # -----------------------------------------
-# Bestimmt Layout (Standard oder LUKS)
-# und setzt abhängige Variablen
+# Setzt Standard- oder LUKS-Layout
+# → steuert spätere Disk-/Bootlogik
 # =========================================
 
 select_install_profile() {
@@ -617,10 +618,10 @@ select_install_profile() {
 }
 
 # =========================================
-# 🔐 Passwörter sicher abfragen
+# 🔐 Passwörter abfragen
 # -----------------------------------------
-# Erfasst und validiert Benutzer- und
-# optional LUKS-Passwörter
+# Erfasst User- und optional LUKS-Passwort
+# → Secrets niemals ausgeben oder loggen
 # =========================================
 
 ask_passwords() {
@@ -656,10 +657,10 @@ ask_passwords() {
 }
 
 # =========================================
-# 🧠 Benutzerkonfiguration sammeln
+# 🧠 Konfiguration sammeln
 # -----------------------------------------
-# Führt gesamten interaktiven Setup-Prozess
-# und setzt alle erforderlichen Variablen
+# Führt alle interaktiven Eingaben aus
+# → Grundlage für destruktive Module
 # =========================================
 
 collect_config() {
@@ -719,8 +720,8 @@ collect_config() {
 # =========================================
 # ✔ Konfiguration validieren
 # -----------------------------------------
-# Prüft Vollständigkeit und Konsistenz
-# aller Eingaben vor Installation
+# Prüft Pflichtwerte und Zielgerät
+# → stoppt vor gefährlichen Operationen
 # =========================================
 
 validate_config() {
@@ -745,8 +746,8 @@ validate_config() {
 # =========================================
 # 📋 Konfiguration bestätigen
 # -----------------------------------------
-# Zeigt finale Zusammenfassung und
-# fordert explizite Bestätigung
+# Zeigt finalen Installationsplan
+# → letzte Sperre vor Datenverlust
 # =========================================
 
 confirm_config() {
@@ -801,8 +802,8 @@ confirm_config() {
 # =========================================
 # 🔍 CPU-Microcode erkennen
 # -----------------------------------------
-# Erkennt CPU-Typ und wählt passendes
-# Microcode-Paket für Stabilität
+# Wählt Intel-/AMD-Microcodepaket
+# → verbessert Boot-Stabilität und CPU-Fixes
 # =========================================
 
 bestimme_microcode_paket() {

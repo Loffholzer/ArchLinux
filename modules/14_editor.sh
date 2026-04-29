@@ -4,25 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      14_editor.sh
-# Zweck:     Editor Setup
+# Zweck:     Nano-Editor einrichten
 #
 # Aufgabe:
 # - installiert nano
-# - setzt Defaults
+# - ergänzt sinnvolle Editor-Defaults
+# - aktiviert Syntax-Highlighting
 #
 # Wichtig:
-# - optional
+# - optional, nicht bootkritisch
+# - Config darf nicht doppelt geschrieben werden
+# - bestehende nanorc muss erhalten bleiben
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. Config nicht doppelt schreiben
+# 1. DRY_RUN respektieren
+# 2. /mnt vor Änderungen validieren
+# 3. Config idempotent erweitern
+# 4. Paketinstallation hart abbrechen
 # =========================================
 
 # =========================================
-# 📝 Editor-Setup orchestrieren
+# 📝 Editor-Setup ausführen
 # -----------------------------------------
-# Steuert Installation und Konfiguration
-# des Nano-Editors
+# Installiert und konfiguriert nano
+# → stellt brauchbaren Fallback-Editor bereit
 # =========================================
 
 run_editor_setup() {
@@ -37,10 +43,10 @@ run_editor_setup() {
 }
 
 # =========================================
-# 🔒 Editor-Voraussetzungen prüfen
+# 🔒 Editor-Eingaben prüfen
 # -----------------------------------------
-# Stellt sicher, dass das Zielsystem
-# korrekt gemountet ist
+# Validiert Zielsystem-Mount /mnt
+# → verhindert Änderung am falschen System
 # =========================================
 
 pruefe_editor_variablen() {
@@ -53,10 +59,10 @@ pruefe_editor_variablen() {
 }
 
 # =========================================
-# 📋 Editor-Konfiguration anzeigen
+# 📋 Editor-Plan anzeigen
 # -----------------------------------------
-# Zeigt geplante Nano-Features
-# und Einstellungen
+# Zeigt geplante Nano-Konfiguration
+# → Sichtprüfung vor nanorc-Änderung
 # =========================================
 
 zeige_editor_plan() {
@@ -76,7 +82,8 @@ zeige_editor_plan() {
 # =========================================
 # 📦 Nano installieren
 # -----------------------------------------
-# Installiert Nano im Zielsystem
+# Installiert nano ins Zielsystem
+# → Paketfehler bricht Editor-Setup ab
 # =========================================
 
 installiere_nano() {
@@ -93,8 +100,8 @@ installiere_nano() {
 # =========================================
 # ⚙️ Nano konfigurieren
 # -----------------------------------------
-# Ergänzt nanorc um sinnvolle Defaults
-# und aktiviert Syntax-Highlighting
+# Ergänzt nanorc um Editor-Defaults
+# → Marker verhindert doppelte Einträge
 # =========================================
 
 konfiguriere_nano() {

@@ -4,27 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      10_snapshot_boot.sh
-# Zweck:     Snapshot-Boot Integration
+# Zweck:     Snapshot-Boot in Limine integrieren
 #
 # Aufgabe:
-# - erkennt Snapper Snapshots
-# - generiert sichere Boot-Einträge
-# - aktualisiert limine.conf
+# - erkennt valide Snapper-Snapshots
+# - erzeugt Recovery-Boot-Einträge
+# - aktualisiert Snapshot-Block in limine.conf
 #
 # Wichtig:
-# - NIEMALS kaputte Snapshots eintragen
-# - Boot muss IMMER funktionieren
+# - kaputte Snapshots dürfen nie gebootet werden
+# - Haupt-Bootmenü muss immer intakt bleiben
+# - falsche Snapshot-Cmdline = Recovery-Fail
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. Nur valide Snapshots verwenden
-# 2. limine.conf atomar schreiben
-# 3. Fallback: keine Snapshots → trotzdem bootbar
+# 1. DRY_RUN respektieren
+# 2. Nur valide Snapshots eintragen
+# 3. limine.conf atomar ersetzen
+# 4. Ohne Snapshots weiterhin bootfähig bleiben
 # =========================================
 
-
 # =========================================
-# 🚀 Snapshot-Boot orchestrieren
+# 🚀 Snapshot-Boot ausführen
+# -----------------------------------------
+# Sammelt Snapshots und aktualisiert Limine
+# → ergänzt Recovery-Einträge ohne Hauptboot zu brechen
 # =========================================
 
 run_snapshot_boot_setup() {
@@ -38,9 +42,11 @@ run_snapshot_boot_setup() {
   success "Snapshot-Boot vorbereitet."
 }
 
-
 # =========================================
-# 🔒 Variablen prüfen
+# 🔒 Snapshot-Boot Eingaben prüfen
+# -----------------------------------------
+# Validiert ROOT_DEVICE, /mnt und limine.conf
+# → stoppt vor defekter Bootmenü-Änderung
 # =========================================
 
 pruefe_snapshot_boot_variablen() {
@@ -56,9 +62,11 @@ pruefe_snapshot_boot_variablen() {
   fi
 }
 
-
 # =========================================
-# 📋 Plan anzeigen
+# 📋 Snapshot-Boot Plan anzeigen
+# -----------------------------------------
+# Zeigt Quelle und Ziel der Integration
+# → Sichtprüfung vor Bootmenü-Änderung
 # =========================================
 
 zeige_snapshot_boot_plan() {
@@ -69,12 +77,11 @@ zeige_snapshot_boot_plan() {
   echo
 }
 
-
 # =========================================
 # 🔎 Valide Snapshots sammeln
 # -----------------------------------------
-# Nur Snapshots die wirklich bootfähig sind
-# werden berücksichtigt
+# Filtert Snapshots auf bootfähige Struktur
+# → verhindert kaputte Recovery-Einträge
 # =========================================
 
 sammle_valide_snapshots() {
@@ -93,50 +100,63 @@ sammle_valide_snapshots() {
     local id
     id="$(basename "$(dirname "$snap")")"
 
-    # KRITISCH: Snapshot muss ein funktionierendes System enthalten
-    if [[ ! -f "$snap/etc/os-release" ]]; then
+    [[ -f "$snap/etc/os-release" ]] || continue
+
+    if [[ ! -f /mnt/boot/vmlinuz-linux ]]; then
       continue
     fi
 
-    if [[ ! -f "$snap/boot/vmlinuz-linux" && ! -f /mnt/boot/vmlinuz-linux ]]; then
+    if [[ ! -f /mnt/boot/initramfs-linux.img ]]; then
+      continue
+    fi
+
+    if [[ ! -d "$snap/usr/lib/modules" ]]; then
       continue
     fi
 
     VALID_SNAPSHOTS+=("$id")
-
   done < <(find "$base" -mindepth 2 -maxdepth 2 -type d -name snapshot | sort -Vr | head -n 5)
 
   export VALID_SNAPSHOTS
 }
 
-
 # =========================================
-# 🧠 Snapshot CMDLINE bauen
+# 🧠 Snapshot-Cmdline bauen
+# -----------------------------------------
+# Erstellt Root-/LUKS-Parameter für Snapshot
+# → falsche UUID/Subvol macht Recovery unbootbar
 # =========================================
 
 build_snapshot_cmdline() {
   local snapshot_id="$1"
-
-  local root_uuid
-  root_uuid="$(blkid -s UUID -o value "$ROOT_DEVICE")"
-
-  [[ -n "$root_uuid" ]] || return 1
-
   local subvol="@snapshots/${snapshot_id}/snapshot"
+  local root_uuid
 
   if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
-    local crypt_uuid
-    crypt_uuid="$(blkid -s UUID -o value "$ROOT_BASE_DEVICE")"
+    guard_require_var ROOT_BASE_DEVICE
+    guard_require_var ROOT_MAPPER_NAME
 
-    echo "cryptdevice=UUID=${crypt_uuid}:${ROOT_MAPPER_NAME} root=/dev/mapper/${ROOT_MAPPER_NAME} rootflags=subvol=${subvol} ro systemd.volatile=overlay"
+    root_uuid="$(blkid -s UUID -o value "$ROOT_BASE_DEVICE")"
+
+    [[ -n "$root_uuid" ]] || return 1
+
+    echo "cryptdevice=UUID=${root_uuid}:${ROOT_MAPPER_NAME} root=/dev/mapper/${ROOT_MAPPER_NAME} rootflags=subvol=${subvol} ro systemd.volatile=overlay"
   else
+    guard_require_var ROOT_DEVICE
+
+    root_uuid="$(blkid -s UUID -o value "$ROOT_DEVICE")"
+
+    [[ -n "$root_uuid" ]] || return 1
+
     echo "root=UUID=${root_uuid} rootflags=subvol=${subvol} ro systemd.volatile=overlay"
   fi
 }
 
-
 # =========================================
 # 📝 Snapshot-Einträge erzeugen
+# -----------------------------------------
+# Baut Limine-Menüeinträge für valide Snapshots
+# → leerer Fallback bleibt ungefährlich
 # =========================================
 
 generiere_snapshot_entries() {
@@ -164,11 +184,11 @@ EOF
   done
 }
 
-
 # =========================================
-# 🔄 limine.conf Snapshot Block ersetzen
+# 🔄 Snapshot-Block ersetzen
 # -----------------------------------------
-# Atomare Aktualisierung ohne Risiko
+# Ersetzt Snapshot-Bereich in limine.conf
+# → atomar, ohne Haupt-Bootentries anzufassen
 # =========================================
 
 aktualisiere_limine_snapshot_block() {

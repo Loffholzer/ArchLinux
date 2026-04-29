@@ -4,26 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      11_shell.sh
-# Zweck:     Shell Setup
+# Zweck:     Shell-Umgebung einrichten
 #
 # Aufgabe:
-# - installiert fish + tools
-# - konfiguriert Benutzerumgebung
+# - installiert fish, starship und CLI-Helfer
+# - setzt fish als Login-Shell
+# - schreibt User-/Root-Shellkonfiguration
 #
 # Wichtig:
-# - rein kosmetisch / UX
+# - optional, aber login-relevant
+# - defekte Shell kann Benutzerlogin stören
+# - bestehende Configs nicht unnötig zerstören
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. idempotent konfigurieren
-# 2. keine bestehenden configs zerstören
+# 1. DRY_RUN respektieren
+# 2. User und /mnt validieren
+# 3. Konfiguration idempotent schreiben
+# 4. Rechte nach Config-Erstellung setzen
 # =========================================
 
 # =========================================
-# 🐚 Shell-Setup orchestrieren
+# 🐚 Shell-Setup ausführen
 # -----------------------------------------
-# Steuert Installation und Konfiguration
-# von fish, starship und Shell-Umgebung
+# Installiert Tools und schreibt Shell-Config
+# → richtet komfortable Login-Umgebung ein
 # =========================================
 
 run_shell_setup() {
@@ -40,10 +45,10 @@ run_shell_setup() {
 }
 
 # =========================================
-# 🔒 Shell-Voraussetzungen prüfen
+# 🔒 Shell-Eingaben prüfen
 # -----------------------------------------
-# Validiert Username und stellt sicher,
-# dass das Zielsystem gemountet ist
+# Validiert USERNAME und Zielsystem-Mount
+# → verhindert Config am falschen Ziel
 # =========================================
 
 pruefe_shell_variablen() {
@@ -58,10 +63,10 @@ pruefe_shell_variablen() {
 }
 
 # =========================================
-# 📋 Shell-Konfiguration anzeigen
+# 📋 Shell-Plan anzeigen
 # -----------------------------------------
-# Zeigt geplante Shell, Tools und
-# Anpassungen vor Installation
+# Zeigt User, Shell, Prompt und Fonts
+# → Sichtprüfung vor UX-Änderungen
 # =========================================
 
 zeige_shell_plan() {
@@ -80,8 +85,8 @@ zeige_shell_plan() {
 # =========================================
 # 📦 Shell-Tools installieren
 # -----------------------------------------
-# Installiert fish, starship und
-# unterstützende CLI-Utilities
+# Installiert fish, starship und Helfertools
+# → Grundlage für die generierte config.fish
 # =========================================
 
 installiere_shell_tools() {
@@ -111,10 +116,10 @@ installiere_shell_tools() {
 }
 
 # =========================================
-# 🔄 Default-Shell setzen
+# 🔄 Login-Shell setzen
 # -----------------------------------------
-# Setzt fish als Login-Shell für
-# Benutzer und optional root
+# Setzt fish für User und root
+# → falsche Shell kann Login brechen
 # =========================================
 
 setze_default_shell() {
@@ -130,10 +135,10 @@ setze_default_shell() {
 }
 
 # =========================================
-# ✨ Starship konfigurieren
+# ✨ Starship aktivieren
 # -----------------------------------------
-# Aktiviert starship im fish-Setup
-# und stellt idempotente Konfiguration sicher
+# Ergänzt starship init in config.fish
+# → idempotente Prompt-Aktivierung
 # =========================================
 
 konfiguriere_starship() {
@@ -161,10 +166,10 @@ konfiguriere_starship() {
 }
 
 # =========================================
-# ⚡ Shell-Aliase konfigurieren
+# ⚡ Shell-Aliase schreiben
 # -----------------------------------------
-# Erstellt zentrale config.fish mit
-# Aliases und Tool-Initialisierung
+# Erstellt zentrale fish-Konfiguration
+# → überschreibt User- und Root-config.fish
 # =========================================
 
 setze_aliases() {

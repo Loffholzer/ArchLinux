@@ -4,27 +4,30 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      06_perf.sh
-# Zweck:     Performance-Tuning
+# Zweck:     Optionale Performance-Tweaks
 #
 # Aufgabe:
-# - optimiert pacman
-# - optional ZRAM konfigurieren
+# - optimiert pacman-Konfiguration
+# - installiert und konfiguriert ZRAM
 #
 # Wichtig:
-# - keine kritischen Systemeingriffe
+# - nicht bootkritisch
+# - Fehler dürfen Basissystem nicht gefährden
+# - Änderungen müssen idempotent bleiben
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. Nur optionale Optimierungen
-# 2. Keine Systeminstabilität riskieren
-# 3. idempotent bleiben
+# 1. DRY_RUN respektieren
+# 2. Nur optionale Optimierungen durchführen
+# 3. Keine Systeminstabilität riskieren
+# 4. Bestehende Konfigurationen nicht beschädigen
 # =========================================
 
 # =========================================
-# ⚡ Performance-Setup orchestrieren
+# ⚡ Performance-Setup ausführen
 # -----------------------------------------
-# Steuert Pacman-Optimierungen und
-# optionale ZRAM-Konfiguration
+# Wendet Pacman- und ZRAM-Tweaks an
+# → verbessert Nutzung ohne Bootkritikalität
 # =========================================
 
 run_perf_setup() {
@@ -38,10 +41,10 @@ run_perf_setup() {
 }
 
 # =========================================
-# 📋 Performance-Optimierungen anzeigen
+# 📋 Performance-Plan anzeigen
 # -----------------------------------------
-# Zeigt geplante Pacman- und
-# System-Tweaks vor Anwendung
+# Zeigt geplante optionale Optimierungen
+# → Sichtprüfung vor Konfigurationsänderungen
 # =========================================
 
 zeige_perf_plan() {
@@ -58,10 +61,10 @@ zeige_perf_plan() {
 }
 
 # =========================================
-# ⚙️ Pacman konfigurieren
+# ⚙️ Pacman optimieren
 # -----------------------------------------
-# Aktiviert ParallelDownloads, Farbe
-# und zusätzliche Pacman-UX-Optionen
+# Aktiviert Downloads, Farbe und UX-Optionen
+# → beschleunigt und verbessert Paketverwaltung
 # =========================================
 
 optimiere_pacman() {
@@ -82,30 +85,22 @@ optimiere_pacman() {
 
   log "Optimiere pacman..."
 
-  sed -i 's/^#ParallelDownloads/ParallelDownloads/' "$pacman_conf" || {
-    error "ParallelDownloads konnte nicht aktiviert werden."
-    exit 1
-  }
+  sed -i -E 's/^[[:space:]]*#?[[:space:]]*ParallelDownloads[[:space:]]*=.*/ParallelDownloads = 10/' "$pacman_conf"
+  grep -qE '^ParallelDownloads[[:space:]]*=' "$pacman_conf" || echo "ParallelDownloads = 10" >> "$pacman_conf"
 
-  sed -i 's/^#Color/Color/' "$pacman_conf" || {
-    error "Color konnte nicht aktiviert werden."
-    exit 1
-  }
+  sed -i -E 's/^[[:space:]]*#?[[:space:]]*Color[[:space:]]*$/Color/' "$pacman_conf"
+  grep -qE '^Color$' "$pacman_conf" || echo "Color" >> "$pacman_conf"
 
-  grep -q "^ILoveCandy" "$pacman_conf" || \
-    sed -i '/^#VerbosePkgLists/a ILoveCandy' "$pacman_conf" || {
-      error "ILoveCandy konnte nicht gesetzt werden."
-      exit 1
-    }
+  grep -qE '^ILoveCandy$' "$pacman_conf" || echo "ILoveCandy" >> "$pacman_conf"
 
-  success "Pacman jetzt hübsch ✨"
+  success "Pacman optimiert."
 }
 
 # =========================================
 # 💾 ZRAM konfigurieren
 # -----------------------------------------
-# Installiert zram-generator und richtet
-# komprimierten RAM-Swap ein
+# Richtet komprimierten RAM-Swap ein
+# → verbessert Verhalten bei Speicherdruck
 # =========================================
 
 installiere_zram() {

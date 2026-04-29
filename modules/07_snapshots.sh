@@ -4,28 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      07_snapshots.sh
-# Zweck:     BTRFS Snapshots (Snapper)
+# Zweck:     Snapper-Recovery vorbereiten
 #
 # Aufgabe:
-# - installiert snapper
-# - richtet root Snapshot-Konfiguration ein
-# - validiert Subvolume Struktur
+# - installiert Snapper
+# - konfiguriert Root-Snapshots
+# - validiert @snapshots-Struktur
 #
 # Wichtig:
-# - falsche Snapper Config = kein Recovery
-# - falsche Rechte = Snapshots unbrauchbar
+# - falsche Config = kein Recovery
+# - falsche Rechte = unbrauchbare Snapshots
+# - fehlendes @snapshots bricht Snapshot-Boot
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. /mnt muss korrekt gemountet sein
-# 2. @snapshots MUSS existieren
-# 3. Snapper Config deterministisch
+# 1. DRY_RUN respektieren
+# 2. /mnt und @snapshots validieren
+# 3. Snapper deterministisch konfigurieren
 # 4. Rechte strikt setzen
 # =========================================
 
-
 # =========================================
-# 🚀 Snapshot Setup orchestrieren
+# 🚀 Snapshot-Setup ausführen
+# -----------------------------------------
+# Installiert, konfiguriert und validiert Snapper
+# → Grundlage für Recovery und Snapshot-Boot
 # =========================================
 
 run_snapshot_setup() {
@@ -41,9 +44,11 @@ run_snapshot_setup() {
   success "Snapshots vorbereitet."
 }
 
-
 # =========================================
-# 🔒 Variablen prüfen
+# 🔒 Snapshot-Eingaben prüfen
+# -----------------------------------------
+# Validiert ROOT_DEVICE und /mnt
+# → stoppt vor falschem Snapshot-Ziel
 # =========================================
 
 pruefe_snapshot_variablen() {
@@ -54,9 +59,11 @@ pruefe_snapshot_variablen() {
   fi
 }
 
-
 # =========================================
-# 📋 Plan anzeigen
+# 📋 Snapshot-Plan anzeigen
+# -----------------------------------------
+# Zeigt geplante Snapper-Konfiguration
+# → Sichtprüfung vor Recovery-Setup
 # =========================================
 
 zeige_snapshot_plan() {
@@ -67,12 +74,11 @@ zeige_snapshot_plan() {
   echo
 }
 
-
 # =========================================
-# 🔍 Snapshot-Struktur validieren
+# 🔍 Snapshot-Struktur prüfen
 # -----------------------------------------
-# Stellt sicher, dass Subvolume korrekt
-# gemountet und nutzbar ist
+# Validiert /.snapshots als BTRFS-Subvolume
+# → verhindert defektes Recovery-Layout
 # =========================================
 
 validiere_snapshot_struktur() {
@@ -99,9 +105,11 @@ validiere_snapshot_struktur() {
   }
 }
 
-
 # =========================================
 # 📦 Snapper installieren
+# -----------------------------------------
+# Installiert Snapshot-Werkzeug ins Zielsystem
+# → Voraussetzung für Recovery-Snapshots
 # =========================================
 
 installiere_snapper() {
@@ -113,11 +121,11 @@ installiere_snapper() {
   run_cmd arch-chroot /mnt pacman -S --noconfirm snapper
 }
 
-
 # =========================================
 # ⚙️ Snapper konfigurieren
 # -----------------------------------------
-# Erstellt saubere Root-Config
+# Schreibt Root-Snapshot-Konfiguration
+# → falsche Config macht Recovery nutzlos
 # =========================================
 
 konfiguriere_snapper() {
@@ -132,41 +140,34 @@ konfiguriere_snapper() {
   mkdir -p "$config_dir"
   mkdir -p /mnt/.snapshots
 
-  # Wenn bereits vorhanden → NICHT überschreiben
-  if [[ -f "$config_file" ]]; then
-    warn "Snapper Config existiert bereits"
-  else
-    cat > "$config_file" <<'EOF'
-SUBVOLUME="/"
-FSTYPE="btrfs"
-ALLOW_USERS=""
-ALLOW_GROUPS="wheel"
-SYNC_ACL="yes"
-
-TIMELINE_CREATE="yes"
-TIMELINE_CLEANUP="yes"
-
-NUMBER_CLEANUP="yes"
-
-EMPTY_PRE_POST_CLEANUP="yes"
-EOF
+  if [[ ! -f "$config_file" ]]; then
+    run_cmd arch-chroot /mnt snapper -c root create-config /
   fi
 
-  # Snapper aktivieren
+  [[ -f "$config_file" ]] || {
+    error "Snapper Config konnte nicht erstellt werden"
+    exit 1
+  }
+
+  sed -i 's/^ALLOW_GROUPS=.*/ALLOW_GROUPS="wheel"/' "$config_file"
+  sed -i 's/^SYNC_ACL=.*/SYNC_ACL="yes"/' "$config_file"
+  sed -i 's/^TIMELINE_CREATE=.*/TIMELINE_CREATE="yes"/' "$config_file"
+  sed -i 's/^TIMELINE_CLEANUP=.*/TIMELINE_CLEANUP="yes"/' "$config_file"
+  sed -i 's/^NUMBER_CLEANUP=.*/NUMBER_CLEANUP="yes"/' "$config_file"
+  sed -i 's/^EMPTY_PRE_POST_CLEANUP=.*/EMPTY_PRE_POST_CLEANUP="yes"/' "$config_file"
+
   mkdir -p /mnt/etc/conf.d
   echo 'SNAPPER_CONFIGS="root"' > /mnt/etc/conf.d/snapper
 
-  # Rechte setzen (CRITICAL)
   arch-chroot /mnt chown root:wheel /.snapshots
   chmod 750 /mnt/.snapshots
 }
 
-
 # =========================================
-# 🔥 Snapper Setup validieren
+# 🔥 Snapper validieren
 # -----------------------------------------
-# Stellt sicher, dass Snapper korrekt
-# funktioniert und nutzbar ist
+# Prüft Config und Snapper-Ausführbarkeit
+# → stoppt bei defektem Recovery-Setup
 # =========================================
 
 validiere_snapper() {
@@ -181,7 +182,16 @@ validiere_snapper() {
     exit 1
   }
 
-  # Snapper Testlauf
+  grep -q '^SUBVOLUME="/"$' "$config" || {
+    error "Snapper SUBVOLUME ist nicht korrekt"
+    exit 1
+  }
+
+  grep -q '^ALLOW_GROUPS="wheel"$' "$config" || {
+    error "Snapper ALLOW_GROUPS ist nicht korrekt"
+    exit 1
+  }
+
   arch-chroot /mnt snapper -c root list >/dev/null 2>&1 || {
     error "Snapper funktioniert nicht korrekt"
     exit 1

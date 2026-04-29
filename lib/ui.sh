@@ -4,24 +4,28 @@
 # 📦 UI & Logging Bibliothek
 # -----------------------------------------
 # Name:      ui.sh
-# Zweck:     Ausgabe & Interaktion
+# Zweck:     Ausgabe und Interaktion kapseln
 #
 # Aufgabe:
-# - Logging (info, warn, error)
-# - UI-Komponenten
-# - Formatierung
+# - stellt Farb- und Logfunktionen bereit
+# - formatiert Menüs, Listen und Header
+# - zeigt Status- und Suchergebnisse
 #
 # Wichtig:
-# - KEINE Systemlogik
+# - keine Systemlogik
+# - keine destruktiven Aktionen
+# - Ausgabe darf keine Secrets enthalten
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. nur Darstellung
-# 2. keine Seiteneffekte
+# 1. Nur Darstellung
+# 2. Keine Seiteneffekte
+# 3. Keine Secrets ausgeben
+# 4. Keine Installer-Logik einbauen
 # =========================================
 
 # =========================
-# 🎨 Farben & Logging
+# 🎨 Farben definieren
 # =========================
 
 RED='\033[0;31m'
@@ -33,19 +37,19 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # =========================================
-# ℹ️ Info-Log ausgeben
+# ℹ️ Info ausgeben
 # -----------------------------------------
-# Gibt formatierte Informationsmeldungen
-# für normalen Ablauf aus
+# Formatiert normale Statusmeldungen
+# → für nicht-kritische Ablaufinfos
 # =========================================
 
 log()     { echo -e "${BLUE}[INFO]${NC} $1"; }
 
 # =========================================
-# ✅ Erfolgsmeldung ausgeben
+# ✅ Erfolg ausgeben
 # -----------------------------------------
-# Signalisiert erfolgreich abgeschlossene
-# Schritte im Installationsprozess
+# Markiert erfolgreich abgeschlossene Schritte
+# → visuelles Feedback für sichere Zustände
 # =========================================
 
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -53,25 +57,26 @@ success() { echo -e "${GREEN}[OK]${NC} $1"; }
 # =========================================
 # ⚠️ Warnung ausgeben
 # -----------------------------------------
-# Zeigt nicht-kritische Probleme oder
-# Hinweise für den Benutzer an
+# Markiert nicht-fatale Probleme
+# → Benutzer muss mögliche Risiken sehen
 # =========================================
 
 warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 # =========================================
-# ❌ Fehlermeldung ausgeben
+# ❌ Fehler ausgeben
 # -----------------------------------------
-# Signalisiert kritische Fehlerzustände
-# im Installationsprozess
+# Markiert kritische Fehlerzustände
+# → Aufrufer muss danach abbrechen
 # =========================================
 
 error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # =========================================
-# 📌 Abschnitts-Header anzeigen
+# 📌 Header ausgeben
 # -----------------------------------------
-# Hebt neue Installationsphasen visuell hervor
+# Zeigt neuen Abschnitt im Ablauf
+# → verbessert Orientierung im Installer
 # =========================================
 
 header() {
@@ -82,8 +87,8 @@ header() {
 # =========================================
 # 🔢 Nummer formatieren
 # -----------------------------------------
-# Formatiert Zahlen für konsistente
-# Anzeige in Menüs
+# Formatiert Menünummern farbig
+# → konsistente Auswahloberfläche
 # =========================================
 
 num() {
@@ -91,10 +96,10 @@ num() {
 }
 
 # =========================================
-# 📋 Menüoption anzeigen
+# 📋 Menüoption ausgeben
 # -----------------------------------------
-# Gibt nummerierte Auswahloptionen
-# für Benutzerinteraktion aus
+# Zeigt nummerierte Auswahloption
+# → Standardformat für interaktive Menüs
 # =========================================
 
 print_option() {
@@ -104,10 +109,10 @@ print_option() {
 }
 
 # =========================================
-# 📊 Spaltenlayout anzeigen
+# 📊 Spalten ausgeben
 # -----------------------------------------
-# Formatiert Listen dynamisch in
-# mehrere Spalten je nach Terminalbreite
+# Formatiert Listen abhängig von Terminalbreite
+# → bessere Lesbarkeit bei vielen Treffern
 # =========================================
 
 print_columns() {
@@ -148,10 +153,10 @@ print_columns() {
 }
 
 # =========================================
-# 🔍 Suchergebnisse anzeigen
+# 🔍 Suchergebnisse ausgeben
 # -----------------------------------------
-# Zeigt gefilterte Ergebnisse mit
-# Kontext und Navigation an
+# Zeigt Suche, Trefferzahl und Ergebnisliste
+# → konsistente Auswahl nach Suchvorgängen
 # =========================================
 
 print_search_results() {
@@ -178,8 +183,8 @@ print_search_results() {
 # =========================================
 # 🌐 Locales formatieren
 # -----------------------------------------
-# Ordnet Locales und stellt sicher,
-# dass en_US.UTF-8 zuletzt steht
+# Sortiert en_US.UTF-8 ans Ende
+# → vermeidet verwirrende Locale-Anzeige
 # =========================================
 
 format_locales() {
@@ -209,10 +214,10 @@ format_locales() {
 }
 
 # =========================================
-# 📊 Statusübersicht anzeigen
+# 📊 Statusblock ausgeben
 # -----------------------------------------
-# Zeigt aktuellen Fortschritt von
-# Keymap, Timezone und Locales
+# Zeigt gewählte Keymap, Timezone und Locales
+# → Orientierung während der Konfiguration
 # =========================================
 
 print_info_block() {
@@ -237,10 +242,10 @@ print_info_block() {
 }
 
 # =========================================
-# 🧭 Phasen-Header anzeigen
+# 🧭 Phasenheader ausgeben
 # -----------------------------------------
-# Kombiniert Statusanzeige mit neuem
-# Abschnitt für bessere Orientierung
+# Räumt Bildschirm und zeigt Status + Abschnitt
+# → sauberer Wechsel zwischen Eingabephasen
 # =========================================
 
 phase_header() {

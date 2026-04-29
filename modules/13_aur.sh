@@ -4,25 +4,31 @@
 # 📦 Arch Installer Modul
 # -----------------------------------------
 # Name:      13_aur.sh
-# Zweck:     AUR Integration
+# Zweck:     AUR-Helper einrichten
 #
 # Aufgabe:
-# - installiert paru
+# - installiert paru aus dem AUR
+# - baut Paket als normaler Benutzer
+# - schreibt definierte paru-Konfiguration
 #
 # Wichtig:
-# - temporäre sudo Rechte kritisch
+# - temporäre NOPASSWD-Rechte sind kritisch
+# - Build darf niemals als root laufen
+# - sudoers muss nach Fehlern bereinigt werden
 # =========================================
 # ⚙️ Coding-Guidelines
 # -----------------------------------------
-# 1. sudo temporär und sicher entfernen
-# 2. Build nicht als root
+# 1. DRY_RUN respektieren
+# 2. Build nur als Benutzer ausführen
+# 3. Temporäre sudoers-Datei validieren
+# 4. Temporäre Rechte immer entfernen
 # =========================================
 
 # =========================================
-# 🏗️ AUR-Setup orchestrieren
+# 🏗️ AUR-Setup ausführen
 # -----------------------------------------
-# Steuert Installation und Konfiguration
-# des AUR-Helpers paru
+# Installiert und konfiguriert paru
+# → ermöglicht AUR-Nutzung für den Benutzer
 # =========================================
 
 run_aur_setup() {
@@ -37,10 +43,10 @@ run_aur_setup() {
 }
 
 # =========================================
-# 🔒 AUR-Voraussetzungen prüfen
+# 🔒 AUR-Eingaben prüfen
 # -----------------------------------------
-# Validiert Benutzer und stellt sicher,
-# dass Zielsystem gemountet ist
+# Validiert USERNAME und Zielsystem-Mount
+# → verhindert Build im falschen Kontext
 # =========================================
 
 pruefe_aur_variablen() {
@@ -55,10 +61,10 @@ pruefe_aur_variablen() {
 }
 
 # =========================================
-# 📋 AUR-Setup anzeigen
+# 📋 AUR-Plan anzeigen
 # -----------------------------------------
-# Zeigt geplante Installation von paru
-# und Benutzerkontext
+# Zeigt Helper und Build-Benutzer
+# → Sichtprüfung vor temporären sudo-Rechten
 # =========================================
 
 zeige_aur_plan() {
@@ -75,8 +81,8 @@ zeige_aur_plan() {
 # =========================================
 # 📦 paru installieren
 # -----------------------------------------
-# Baut und installiert paru sicher
-# mit temporären sudo-Rechten
+# Baut paru als Benutzer mit temporärem sudo
+# → Rechte müssen danach entfernt werden
 # =========================================
 
 installiere_paru() {
@@ -87,15 +93,19 @@ installiere_paru() {
   }
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Sudo-Rechte anpassen und paru installieren"
-    warn "[DRY-RUN] würde temporäre Sudo-Datei nach Abschluss entfernen: $sudoers_file"
+    warn "[DRY-RUN] würde temporäre Sudo-Rechte setzen und paru installieren"
+    warn "[DRY-RUN] würde temporäre Sudo-Datei entfernen: $sudoers_file"
     return 0
   fi
 
-  log "Vorbereiten der Sudo-Rechte für den Build-Prozess..."
+  log "Vorbereiten temporärer Sudo-Rechte für paru..."
 
   mkdir -p /mnt/etc/sudoers.d
-  echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > "$sudoers_file"
+
+  cat > "$sudoers_file" <<EOF
+${USERNAME} ALL=(ALL:ALL) NOPASSWD: /usr/bin/pacman, /usr/bin/makepkg
+EOF
+
   chmod 440 "$sudoers_file"
 
   trap cleanup_installer_sudo RETURN
@@ -105,13 +115,12 @@ installiere_paru() {
     return 1
   }
 
-  log "Installiere Abhängigkeiten für paru..."
-  arch-chroot /mnt pacman -S --noconfirm base-devel git sudo || {
-    error "Abhängigkeiten für paru konnten nicht installiert werden."
-    return 1
-  }
+  log "Installiere paru-Abhängigkeiten..."
+
+  run_cmd arch-chroot /mnt pacman -S --noconfirm base-devel git sudo
 
   log "Baue und installiere paru als Benutzer $USERNAME..."
+
   arch-chroot /mnt sudo -u "$USERNAME" bash -c "
     set -euo pipefail
     cd /tmp
@@ -133,8 +142,8 @@ installiere_paru() {
 # =========================================
 # ⚙️ paru konfigurieren
 # -----------------------------------------
-# Setzt definierte Default-Optionen
-# für reproduzierbares Verhalten
+# Schreibt definierte paru-Defaults
+# → reproduzierbares AUR-Verhalten
 # =========================================
 
 konfiguriere_paru() {
