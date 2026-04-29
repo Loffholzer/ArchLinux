@@ -257,9 +257,9 @@ baue_snapshot_cmdline() {
       return 1
     }
 
-    cmdline="cryptdevice=UUID=${crypt_uuid}:${ROOT_MAPPER_NAME} root=/dev/mapper/${ROOT_MAPPER_NAME} rootflags=subvol=${snapshot_subvol} ro"
+    cmdline="cryptdevice=UUID=${crypt_uuid}:${ROOT_MAPPER_NAME} root=/dev/mapper/${ROOT_MAPPER_NAME} rootflags=subvol=${snapshot_subvol} ro systemd.volatile=overlay"
   else
-    cmdline="root=UUID=${root_uuid} rootflags=subvol=${snapshot_subvol} ro"
+    cmdline="root=UUID=${root_uuid} rootflags=subvol=${snapshot_subvol} ro systemd.volatile=overlay"
   fi
 
   echo "$cmdline"
@@ -278,9 +278,8 @@ schreibe_snapshot_entry() {
   [[ "$MICROCODE_PKG" == "intel-ucode" ]] && ucode_name="intel-ucode.img"
   [[ "$MICROCODE_PKG" == "amd-ucode" ]] && ucode_name="amd-ucode.img"
 
-  # Limine Syntax: // für Child-Nodes (Einträge im Untermenü)
   cat <<EOF
-    //${snapshot_date} (ID: ${snapshot_id})
+    //${snapshot_date} (ID: ${snapshot_id}) [Recovery Overlay]
         protocol: linux
         kernel_path: boot():/vmlinuz-linux
 EOF
@@ -302,6 +301,7 @@ EOF
 installiere_snapshot_automatisierung() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Snapshot-Automatisierung im Zielsystem installieren"
+    warn "[DRY-RUN] inklusive systemd Path + Timer als Fallback"
     return 0
   fi
 
@@ -309,63 +309,94 @@ installiere_snapshot_automatisierung() {
 
   local update_script="/mnt/usr/local/bin/limine-snapper-update"
 
-  # 1. Das Update-Skript im Zielsystem erstellen
+  mkdir -p /mnt/usr/local/bin
+
   cat << 'EOF' > "$update_script"
 #!/usr/bin/env bash
-# Generiert Limine Snapshot-Einträge für die letzten 5 Snapshots
+set -euo pipefail
 
 CONFIG="/boot/limine.conf"
 SNAPSHOT_DIR="/.snapshots"
 MAX_SNAPSHOTS=5
 
-[[ -f "$CONFIG" ]] || exit 1
+[[ -f "$CONFIG" ]] || exit 0
+[[ -d "$SNAPSHOT_DIR" ]] || exit 0
 
-# Finde Microcode
 UCODE=""
 [[ -f "/boot/intel-ucode.img" ]] && UCODE="boot():/intel-ucode.img"
 [[ -f "/boot/amd-ucode.img" ]] && UCODE="boot():/amd-ucode.img"
 
-# Extrahiere aktuelle Root-CMDLINE (ohne subvol)
-# Wir nehmen die CMDLINE vom Haupt-Arch-Eintrag und säubern sie
-BASE_CMDLINE=$(grep -m1 "cmdline:" "$CONFIG" | sed 's/.*cmdline: //' | sed 's/rootflags=subvol=[^ ]*//g')
+BASE_CMDLINE="$(grep -m1 "cmdline:" "$CONFIG" | sed 's/.*cmdline: //' | sed 's/rootflags=subvol=[^ ]*//g' | xargs)"
 
-# Temporäre Datei für Einträge
-TMP_ENTRIES=$(mktemp)
+TMP_ENTRIES="$(mktemp)"
+TMP_CONFIG="$(mktemp)"
+
+cleanup() {
+  rm -f "$TMP_ENTRIES" "$TMP_CONFIG"
+}
+trap cleanup EXIT
 
 echo "/Snapshots" > "$TMP_ENTRIES"
 
 found=false
-for snap_dir in $(find "$SNAPSHOT_DIR" -maxdepth 1 -mindepth 1 -type d | sort -Vr | head -n "$MAX_SNAPSHOTS"); do
-    id=$(basename "$snap_dir")
-    [[ -f "$snap_dir/snapshot/etc/os-release" ]] || continue
 
-    date="Snapshot $id"
-    [[ -f "$snap_dir/info.xml" ]] && date=$(grep -oPm1 '(?<=<date>)[^<]+' "$snap_dir/info.xml")
+while IFS= read -r snap_dir; do
+  id="$(basename "$snap_dir")"
 
-    echo "    //${date} (ID: ${id})" >> "$TMP_ENTRIES"
-    echo "        protocol: linux" >> "$TMP_ENTRIES"
-    echo "        kernel_path: boot():/vmlinuz-linux" >> "$TMP_ENTRIES"
-    [[ -n "$UCODE" ]] && echo "        module_path: ${UCODE}" >> "$TMP_ENTRIES"
-    echo "        module_path: boot():/initramfs-linux.img" >> "$TMP_ENTRIES"
-    echo "        cmdline: ${BASE_CMDLINE} rootflags=subvol=@snapshots/${id}/snapshot ro" >> "$TMP_ENTRIES"
-    found=true
-done
+  [[ -f "$snap_dir/snapshot/etc/os-release" ]] || continue
 
-[[ "$found" == "false" ]] && echo "    //Keine Snapshots gefunden" >> "$TMP_ENTRIES"
+  date="Snapshot $id"
+  if [[ -f "$snap_dir/info.xml" ]]; then
+    date="$(grep -oPm1 '(?<=<date>)[^<]+' "$snap_dir/info.xml" 2>/dev/null || echo "Snapshot $id")"
+  fi
 
-# In limine.conf einfügen (Logik analog zum Installer)
+  {
+    echo "    //${date} (ID: ${id}) [Recovery Overlay]"
+    echo "        protocol: linux"
+    echo "        kernel_path: boot():/vmlinuz-linux"
+    [[ -n "$UCODE" ]] && echo "        module_path: ${UCODE}"
+    echo "        module_path: boot():/initramfs-linux.img"
+    echo "        cmdline: ${BASE_CMDLINE} rootflags=subvol=@snapshots/${id}/snapshot ro systemd.volatile=overlay"
+  } >> "$TMP_ENTRIES"
+
+  found=true
+done < <(
+  find "$SNAPSHOT_DIR" -maxdepth 1 -mindepth 1 -type d \
+    | sort -Vr \
+    | head -n "$MAX_SNAPSHOTS"
+)
+
+if [[ "$found" == false ]]; then
+  echo "    //Keine Snapshots gefunden" >> "$TMP_ENTRIES"
+fi
+
 awk -v entries_file="$TMP_ENTRIES" '
-    /^#\+SNAPSHOT_ENTRIES_BEGIN$/ { print; while ((getline line < entries_file) > 0) { print line } close(entries_file); skip=1; next }
-    /^#\+SNAPSHOT_ENTRIES_END$/ { skip=0; print; next }
-    skip != 1 { print }
-' "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+  /^#\+SNAPSHOT_ENTRIES_BEGIN$/ {
+    print
+    while ((getline line < entries_file) > 0) {
+      print line
+    }
+    close(entries_file)
+    skip=1
+    next
+  }
 
-rm -f "$TMP_ENTRIES"
+  /^#\+SNAPSHOT_ENTRIES_END$/ {
+    skip=0
+    print
+    next
+  }
+
+  skip != 1 {
+    print
+  }
+' "$CONFIG" > "$TMP_CONFIG"
+
+install -m 644 "$TMP_CONFIG" "$CONFIG"
 EOF
 
   chmod +x "$update_script"
 
-  # 2. Systemd Service erstellen
   cat << EOF > /mnt/etc/systemd/system/limine-snapper-update.service
 [Unit]
 Description=Update Limine boot entries for Snapper snapshots
@@ -373,22 +404,40 @@ After=local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=$update_script
+ExecStart=/usr/local/bin/limine-snapper-update
 EOF
 
-  # 3. Systemd Path Unit erstellen (Überwacht den Snapshot-Ordner)
   cat << EOF > /mnt/etc/systemd/system/limine-snapper-update.path
 [Unit]
-Description=Monitor Snapper snapshots for Limine update
+Description=Monitor Snapper snapshots for Limine boot entry updates
+After=local-fs.target
 
 [Path]
+PathModified=/.snapshots
 PathChanged=/.snapshots
+PathExistsGlob=/.snapshots/*/snapshot
 Unit=limine-snapper-update.service
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-  # 4. Trigger aktivieren
+  cat << EOF > /mnt/etc/systemd/system/limine-snapper-update.timer
+[Unit]
+Description=Periodic fallback update for Limine Snapper boot entries
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30min
+Persistent=true
+Unit=limine-snapper-update.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
   arch-chroot /mnt systemctl enable limine-snapper-update.path
+  arch-chroot /mnt systemctl enable limine-snapper-update.timer
+
+  success "Snapshot-Automatisierung installiert: Path-Trigger + Timer-Fallback."
 }

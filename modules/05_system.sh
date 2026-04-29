@@ -170,25 +170,9 @@ EOF
 
 installiere_systemdienste() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Systemdienste installieren:"
-    warn "  networkmanager avahi nss-mdns firewalld"
+    warn "[DRY-RUN] Netzwerkdienste werden im Netzwerk-Modul installiert"
     return 0
   fi
 
-  log "Installiere Systemdienste..."
-
-  local packages=(
-    networkmanager
-    avahi
-    nss-mdns
-    firewalld
-  )
-
-  arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
-    error "Systemdienste konnten nicht installiert werden."
-    exit 1
-  }
-
-  arch-chroot /mnt systemctl enable NetworkManager avahi-daemon firewalld
-  success "Systemdienste installiert und aktiviert."
+  log "Netzwerkdienste werden später im Netzwerk-Modul installiert."
 }

@@ -17,6 +17,7 @@
 # - keine Mounts
 # =========================================
 
+# shellcheck disable=SC2317
 run_disk_setup() {
   header "01 - Laufwerk vorbereiten"
 

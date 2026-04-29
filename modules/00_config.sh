@@ -59,8 +59,7 @@ set_default_config() {
 # =========================
 
 export_config() {
-  # Hardware-Variable hinzugefügt
-  export KEYMAP TIMEZONE LOCALES LANG_DEFAULT
+  export KEYMAP TIMEZONE LANG_DEFAULT
   export DISK INSTALL_PROFILE USE_LUKS
   export HOSTNAME USERNAME USER_PASSWORD LUKS_PASSWORD
   export DISABLE_ROOT ENABLE_MULTILIB MICROCODE_PKG
@@ -576,11 +575,17 @@ ask_passwords() {
 # =========================
 
 collect_config() {
- if [[ "$AUTO_MODE" == true ]]; then
-  warn "[AUTO-MODE] Verwende Standardkonfiguration"
-  set_default_config
-  return
- fi
+  if [[ "$AUTO_MODE" == true ]]; then
+    if [[ "${DRY_RUN:-true}" != true ]]; then
+      error "AUTO_MODE darf nicht mit DRY_RUN=false laufen."
+      error "Grund: AUTO_MODE nutzt Standardwerte wie DISK=/dev/sda und ein Standardpasswort."
+      exit 1
+    fi
+
+    warn "[AUTO-MODE] Verwende Standardkonfiguration"
+    set_default_config
+    return
+  fi
 
   clear
   header "Arch Install Config"
@@ -696,7 +701,7 @@ confirm_config() {
 }
 
 # =========================
-# 🔍 CPU-Microcode automatisch bestimmen
+# 🔍 CPU-Microcode erkennen
 # =========================
 
 bestimme_microcode_paket() {

@@ -60,25 +60,33 @@ zeige_aur_plan() {
 # =========================
 
 installiere_paru() {
+  local sudoers_file="/mnt/etc/sudoers.d/10-installer"
+
+  cleanup_installer_sudo() {
+    rm -f "$sudoers_file"
+  }
+
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Sudo-Rechte anpassen und paru installieren"
+    warn "[DRY-RUN] würde temporäre Sudo-Datei nach Abschluss entfernen: $sudoers_file"
     return 0
   fi
 
   log "Vorbereiten der Sudo-Rechte für den Build-Prozess..."
 
-  # Temporäres passwortloses Sudo für die Gruppe wheel einrichten
   mkdir -p /mnt/etc/sudoers.d
-  echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > /mnt/etc/sudoers.d/10-installer
-  chmod 440 /mnt/etc/sudoers.d/10-installer
+  echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > "$sudoers_file"
+  chmod 440 "$sudoers_file"
+
+  trap cleanup_installer_sudo RETURN
 
   log "Installiere Abhängigkeiten für paru..."
   arch-chroot /mnt pacman -S --noconfirm base-devel git sudo || {
-    error "Abhängigkeiten für paru konnten nicht installiert werden."; exit 1;
+    error "Abhängigkeiten für paru konnten nicht installiert werden."
+    return 1
   }
 
   log "Baue und installiere paru als Benutzer $USERNAME..."
-  # Makepkg darf NICHT als root laufen, daher sudo -u $USERNAME
   arch-chroot /mnt sudo -u "$USERNAME" bash -c "
     cd /tmp
     rm -rf paru
@@ -86,8 +94,12 @@ installiere_paru() {
     cd paru
     makepkg -si --noconfirm
   " || {
-    error "paru konnte nicht gebaut werden."; exit 1;
+    error "paru konnte nicht gebaut werden."
+    return 1
   }
+
+  cleanup_installer_sudo
+  trap - RETURN
 
   success "paru erfolgreich installiert."
 }

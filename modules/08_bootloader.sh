@@ -24,6 +24,7 @@ run_bootloader_setup() {
   zeige_bootloader_plan
   mounte_efi
   installiere_kernel_und_boottools
+  konfiguriere_vconsole_fuer_initramfs
   konfiguriere_mkinitcpio
   baue_initramfs
   installiere_limine_efi
@@ -266,6 +267,28 @@ baue_initramfs() {
 }
 
 # =========================
+# ⌨️ vconsole für initramfs vorbereiten
+# =========================
+
+konfiguriere_vconsole_fuer_initramfs() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde vconsole vor initramfs setzen: KEYMAP=${KEYMAP}"
+    return 0
+  fi
+
+  [[ -n "${KEYMAP:-}" ]] || {
+    error "KEYMAP fehlt."
+    exit 1
+  }
+
+  log "Setze vconsole vor initramfs-Erstellung..."
+
+  cat > /mnt/etc/vconsole.conf <<EOF
+KEYMAP=${KEYMAP}
+EOF
+}
+
+# =========================
 # ⚙️ mkinitcpio konfigurieren
 # =========================
 
@@ -292,12 +315,12 @@ konfiguriere_mkinitcpio() {
   log "Konfiguriere mkinitcpio HOOKS..."
 
   if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block encrypt filesystems fsck)/' "$conf" || {
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap encrypt filesystems fsck)/' "$conf" || {
       error "mkinitcpio HOOKS konnten nicht gesetzt werden."
       exit 1
     }
   else
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block filesystems fsck)/' "$conf" || {
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block filesystems fsck)/' "$conf" || {
       error "mkinitcpio HOOKS konnten nicht gesetzt werden."
       exit 1
     }

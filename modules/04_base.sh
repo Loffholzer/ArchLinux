@@ -41,6 +41,7 @@ pruefe_base_variablen() {
 # =========================
 # 📋 Plan anzeigen
 # =========================
+
 zeige_base_plan() {
   header "Geplante Installation"
 
@@ -48,10 +49,12 @@ zeige_base_plan() {
   echo "  base"
   echo "  base-devel"
   echo "  btrfs-progs"
+  echo "  sudo"
+  [[ "${USE_LUKS:-no}" == "yes" ]] && echo "  cryptsetup"
   echo
 
   warn "Dieses Modul installiert das Basissystem nach /mnt."
-  warn "Kernel, Firmware, Limine und Memtest folgen in 08_bootloader.sh."
+  warn "Kernel, Firmware, Limine und Memtest folgen im Bootloader-Modul."
   echo
 }
 
@@ -60,15 +63,28 @@ zeige_base_plan() {
 # =========================
 
 installiere_base() {
+  local packages=(
+    base
+    base-devel
+    btrfs-progs
+    sudo
+  )
+
+  if [[ "${USE_LUKS:-no}" == "yes" ]]; then
+    packages+=(
+      cryptsetup
+    )
+  fi
+
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde pacstrap ausführen:"
-    warn "[DRY-RUN] pacstrap /mnt base base-devel btrfs-progs"
+    warn "[DRY-RUN] pacstrap /mnt ${packages[*]}"
     return 0
   fi
 
-  log "Installiere Basissystem (inkl. BTRFS-Tools)..."
+  log "Installiere Basissystem..."
 
-  pacstrap /mnt base base-devel btrfs-progs || {
+  pacstrap /mnt "${packages[@]}" || {
     error "pacstrap fehlgeschlagen."
     exit 1
   }

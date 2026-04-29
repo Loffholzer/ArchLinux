@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# shellcheck source=lib/ui.sh
+# shellcheck source=modules/00_config.sh
+
 set -euo pipefail
 
 # =========================================
@@ -84,10 +88,10 @@ run_install() {
   run_module "02_encryption.sh" "run_encryption_setup"
   run_module "03_btrfs.sh" "run_btrfs_setup"
   run_module "04_base.sh" "run_base_install"
+  run_module "08_bootloader.sh" "run_bootloader_setup"
   run_module "05_system.sh" "run_system_config"
   run_module "06_perf.sh" "run_perf_setup"
   run_module "07_snapshots.sh" "run_snapshot_setup"
-  run_module "08_bootloader.sh" "run_bootloader_setup"
   run_module "09_user.sh" "run_user_setup"
   run_module "10_snapshot_boot.sh" "run_snapshot_boot_setup"
   run_module "15_network.sh" "run_network_setup"
@@ -97,7 +101,6 @@ run_install() {
   [[ "$INSTALL_AUR" == "yes" ]]    && run_module "13_aur.sh" "run_aur_setup"
   [[ "$INSTALL_EDITOR" == "yes" ]] && run_module "14_editor.sh" "run_editor_setup"
 
-  # Sicherheit nach Abschluss aller Module finalisieren
   run_final_hardening
 }
 
@@ -121,9 +124,17 @@ main() {
 
 run_final_hardening() {
   header "Sicherheit finalisieren"
+
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde temporäre Sudo-Rechte entfernen: /mnt/etc/sudoers.d/10-installer"
+    return 0
+  fi
+
   if [[ -f "/mnt/etc/sudoers.d/10-installer" ]]; then
     rm -f "/mnt/etc/sudoers.d/10-installer"
     success "Temporäre Sudo-Rechte entfernt."
+  else
+    log "Keine temporären Sudo-Rechte gefunden."
   fi
 }
 
