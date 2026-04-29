@@ -226,24 +226,25 @@ installiere_kernel_und_boottools() {
     linux-firmware
     memtest86+-efi
     limine
+    terminus-font
   )
 
   [[ -n "$MICROCODE_PKG" ]] && packages+=("$MICROCODE_PKG")
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde Kernel und Boottools installieren:"
+    warn "[DRY-RUN] würde Kernel, Boottools und Konsolen-Font installieren:"
     warn "  ${packages[*]}"
     return 0
   fi
 
-  log "Installiere Kernel, Boottools und Microcode ($MICROCODE_PKG)..."
+  log "Installiere Kernel, Boottools, Konsolen-Font und Microcode ($MICROCODE_PKG)..."
 
   arch-chroot /mnt pacman -S --noconfirm "${packages[@]}" || {
       error "Kernel/Boottools konnten nicht installiert werden."
       exit 1
   }
 
-  success "Kernel und Boottools installiert."
+  success "Kernel, Boottools und Konsolen-Font installiert."
 }
 
 # =========================
@@ -267,12 +268,12 @@ baue_initramfs() {
 }
 
 # =========================
-# ⌨️ vconsole für initramfs vorbereiten
+# 🖥️ TTY / Konsolen-Font (initramfs)
 # =========================
 
 konfiguriere_vconsole_fuer_initramfs() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde vconsole vor initramfs setzen: KEYMAP=${KEYMAP}"
+    warn "[DRY-RUN] würde vconsole vor initramfs setzen: KEYMAP=${KEYMAP}, FONT=${CONSOLE_FONT:-standard}"
     return 0
   fi
 
@@ -285,6 +286,7 @@ konfiguriere_vconsole_fuer_initramfs() {
 
   cat > /mnt/etc/vconsole.conf <<EOF
 KEYMAP=${KEYMAP}
+FONT=${CONSOLE_FONT:-ter-v32n}
 EOF
 }
 
@@ -297,9 +299,9 @@ konfiguriere_mkinitcpio() {
     warn "[DRY-RUN] würde mkinitcpio HOOKS konfigurieren"
 
     if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
-      warn "[DRY-RUN] LUKS erkannt: HOOKS mit encrypt"
+      warn "[DRY-RUN] LUKS erkannt: HOOKS mit encrypt und consolefont"
     else
-      warn "[DRY-RUN] Kein LUKS erkannt: HOOKS ohne encrypt"
+      warn "[DRY-RUN] Kein LUKS erkannt: HOOKS mit consolefont"
     fi
 
     return 0
@@ -315,12 +317,12 @@ konfiguriere_mkinitcpio() {
   log "Konfiguriere mkinitcpio HOOKS..."
 
   if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap encrypt filesystems fsck)/' "$conf" || {
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap consolefont encrypt filesystems fsck)/' "$conf" || {
       error "mkinitcpio HOOKS konnten nicht gesetzt werden."
       exit 1
     }
   else
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block filesystems fsck)/' "$conf" || {
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap consolefont filesystems fsck)/' "$conf" || {
       error "mkinitcpio HOOKS konnten nicht gesetzt werden."
       exit 1
     }

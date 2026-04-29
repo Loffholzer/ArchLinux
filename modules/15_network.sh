@@ -25,6 +25,7 @@ run_network_setup() {
   konfiguriere_mdns
   setze_firewalld_zone
   konfiguriere_firewalld
+  konfiguriere_ssh
   aktiviere_network_services
 
   success "Netzwerk eingerichtet."
@@ -50,18 +51,23 @@ pruefe_network_variablen() {
 zeige_network_plan() {
   header "Geplante Netzwerk-Konfiguration"
 
-  echo "Pflichtmodul: ja"
+  echo "Pflichtmodule:"
+  echo "  - NetworkManager"
+  echo "  - Avahi (mDNS)"
+  echo "  - firewalld"
   echo
-  echo "Pakete:"
-  echo "  networkmanager"
-  echo "  avahi"
-  echo "  nss-mdns"
-  echo "  firewalld"
-  echo
+
+  if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
+    echo "Optional:"
+    echo "  - OpenSSH (Remote Zugriff)"
+    echo
+  fi
+
   echo "Services:"
   echo "  NetworkManager"
   echo "  avahi-daemon"
   echo "  firewalld"
+  [[ "${INSTALL_SSH:-no}" == "yes" ]] && echo "  sshd"
   echo
 }
 
@@ -76,6 +82,12 @@ installiere_network_pakete() {
     nss-mdns
     firewalld
   )
+
+  if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
+    packages+=(
+      openssh
+    )
+  fi
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Netzwerk-Pakete installieren:"
@@ -138,6 +150,7 @@ konfiguriere_mdns() {
 aktiviere_network_services() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde NetworkManager, avahi-daemon und firewalld aktivieren"
+    [[ "${INSTALL_SSH:-no}" == "yes" ]] && warn "[DRY-RUN] würde sshd aktivieren"
     return 0
   fi
 
@@ -158,7 +171,14 @@ aktiviere_network_services() {
     exit 1
   }
 
-  success "NetworkManager, avahi-daemon und firewalld aktiviert."
+  if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
+    arch-chroot /mnt systemctl enable sshd.service || {
+      error "sshd konnte nicht aktiviert werden."
+      exit 1
+    }
+  fi
+
+  success "Netzwerkdienste aktiviert."
 }
 
 # =========================
@@ -168,6 +188,7 @@ aktiviere_network_services() {
 konfiguriere_firewalld() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde mDNS in firewalld erlauben"
+    [[ "${INSTALL_SSH:-no}" == "yes" ]] && warn "[DRY-RUN] würde SSH in firewalld erlauben"
     return 0
   fi
 
@@ -178,7 +199,14 @@ konfiguriere_firewalld() {
     exit 1
   }
 
-  success "firewalld mDNS-Regel gesetzt."
+  if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
+    arch-chroot /mnt firewall-offline-cmd --add-service=ssh || {
+      error "SSH konnte in firewalld nicht freigegeben werden."
+      exit 1
+    }
+  fi
+
+  success "firewalld-Regeln gesetzt."
 }
 
 # =========================
@@ -199,5 +227,34 @@ setze_firewalld_zone() {
   }
 
   success "firewalld Default-Zone gesetzt: home"
+}
+
+# =========================
+# 🔐 SSH konfigurieren
+# =========================
+
+konfiguriere_ssh() {
+  if [[ "${INSTALL_SSH:-no}" != "yes" ]]; then
+    return 0
+  fi
+
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde SSH absichern (Root-Login deaktivieren)"
+    return 0
+  fi
+
+  local sshd_conf="/mnt/etc/ssh/sshd_config"
+
+  [[ -f "$sshd_conf" ]] || {
+    error "sshd_config nicht gefunden: $sshd_conf"
+    exit 1
+  }
+
+  log "Konfiguriere SSH..."
+
+  sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$sshd_conf"
+  sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' "$sshd_conf"
+
+  success "SSH sicher konfiguriert (kein Root-Login)."
 }
 

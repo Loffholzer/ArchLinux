@@ -21,6 +21,7 @@ run_aur_setup() {
   pruefe_aur_variablen
   zeige_aur_plan
   installiere_paru
+  konfiguriere_paru
 
   success "AUR vorbereitet."
 }
@@ -102,4 +103,37 @@ installiere_paru() {
   trap - RETURN
 
   success "paru erfolgreich installiert."
+}
+
+# =========================
+# ⚙️ paru konfigurieren
+# =========================
+
+konfiguriere_paru() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde paru konfigurieren (BottomUp, Color, SudoLoop, RemoveMake)"
+    return 0
+  fi
+
+  log "Konfiguriere paru Defaults für Benutzer $USERNAME..."
+
+  local config_dir="/mnt/home/${USERNAME}/.config/paru"
+  local config_file="${config_dir}/paru.conf"
+
+  # Verzeichnis erstellen (idempotent)
+  mkdir -p "$config_dir"
+
+  # Config schreiben (überschreibt bewusst -> definierter Zustand)
+  cat > "$config_file" <<'EOF'
+[options]
+BottomUp
+Color
+SudoLoop
+RemoveMake
+EOF
+
+  # Rechte setzen
+  arch-chroot /mnt chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}/.config"
+
+  success "paru konfiguriert (optimierte Defaults aktiv)."
 }

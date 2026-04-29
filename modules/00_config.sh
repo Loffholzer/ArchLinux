@@ -23,7 +23,6 @@
 AUTO_MODE="${AUTO_MODE:-false}"
 declare -a LOCALES=()
 
-
 set_default_config() {
   header "AUTO-MODE"
 
@@ -52,6 +51,9 @@ set_default_config() {
   INSTALL_TOOLS="yes"
   INSTALL_AUR="yes"
   INSTALL_EDITOR="yes"
+  INSTALL_SSH="yes"
+
+  CONSOLE_FONT="ter-v32n"
 }
 
 # =========================
@@ -64,6 +66,8 @@ export_config() {
   export HOSTNAME USERNAME USER_PASSWORD LUKS_PASSWORD
   export DISABLE_ROOT ENABLE_MULTILIB MICROCODE_PKG
   export INSTALL_SHELL INSTALL_TOOLS INSTALL_AUR INSTALL_EDITOR
+  export INSTALL_SSH
+  export CONSOLE_FONT
 }
 
 # =========================
@@ -623,6 +627,9 @@ collect_config() {
   INSTALL_TOOLS="$(ask_yes_no "CLI-Tools installieren?")"
   INSTALL_AUR="$(ask_yes_no "Paru installieren?")"
   INSTALL_EDITOR="$(ask_yes_no "Nano-Setup installieren?")"
+
+  echo
+  INSTALL_SSH="$(ask_yes_no "SSH (OpenSSH) installieren und aktivieren?")"
 }
 
 # =========================
@@ -680,14 +687,15 @@ confirm_config() {
     echo "  CLI-Tools:  $INSTALL_TOOLS"
     echo "  Paru:       $INSTALL_AUR"
     echo "  Nano:       $INSTALL_EDITOR"
+    echo "  SSH:        ${INSTALL_SSH:-no}"
     echo
 
     if [[ "${DRY_RUN:-true}" == true ]]; then
-      warn "DRY-RUN aktiv: Module laufen im Testmodus, schreiben aber keine Änderungen."
+      warn "DRY-RUN aktiv: Module laufen im Testmodus und schreiben keine Änderungen."
       echo
     fi
 
-    warn "Bei echter Ausführung können alle Daten auf $DISK gelöscht werden."
+    warn "Achtung: Alle Daten auf $DISK können gelöscht werden."
     echo
 
     if [[ "$(ask_yes_no "Sind diese Angaben korrekt?")" == "yes" ]]; then

@@ -143,12 +143,12 @@ konfiguriere_timezone() {
 }
 
 # =========================
-# ⌨️ vconsole konfigurieren
+# 🖥️ TTY / Konsolen-Font
 # =========================
 
 konfiguriere_vconsole() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde vconsole setzen: KEYMAP=${KEYMAP}"
+    warn "[DRY-RUN] würde vconsole setzen: KEYMAP=${KEYMAP}, FONT=${CONSOLE_FONT:-standard}"
     return 0
   fi
 
@@ -161,6 +161,7 @@ konfiguriere_vconsole() {
 
   cat > /mnt/etc/vconsole.conf <<EOF
 KEYMAP=${KEYMAP}
+FONT=${CONSOLE_FONT:-ter-v32n}
 EOF
 }
 
