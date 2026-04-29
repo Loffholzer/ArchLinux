@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 Arch Installer Modul
 # -----------------------------------------
@@ -20,13 +21,13 @@
 # 3. root optional sperren
 # =========================================
 
-
 # =========================================
 # 👤 Benutzer-Setup orchestrieren
 # -----------------------------------------
 # Steuert Erstellung des Users,
 # Passwort und Rechtekonfiguration
 # =========================================
+
 run_user_setup() {
   header "09 - Benutzer"
 
@@ -46,6 +47,7 @@ run_user_setup() {
 # Validiert Username, Passwort und
 # gemountetes Zielsystem
 # =========================================
+
 pruefe_user_variablen() {
   [[ -n "${USERNAME:-}" ]] || { error "USERNAME fehlt."; exit 1; }
   [[ -n "${USER_PASSWORD:-}" ]] || { error "USER_PASSWORD fehlt."; exit 1; }
@@ -64,6 +66,7 @@ pruefe_user_variablen() {
 # Zeigt geplanten User, sudo und
 # Root-Status vor Anwendung
 # =========================================
+
 zeige_user_plan() {
   header "Geplante Benutzerkonfiguration"
 
@@ -82,6 +85,7 @@ zeige_user_plan() {
 # Legt neuen User mit Home-Verzeichnis
 # und Gruppenmitgliedschaft an
 # =========================================
+
 erstelle_user() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Benutzer erstellen: $USERNAME"
@@ -105,6 +109,7 @@ erstelle_user() {
 # Setzt Passwort im Zielsystem
 # via chpasswd
 # =========================================
+
 setze_passwoerter() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde Passwort für $USERNAME setzen"
@@ -122,6 +127,7 @@ setze_passwoerter() {
 # Aktiviert sudo für wheel-Gruppe
 # im Zielsystem
 # =========================================
+
 konfiguriere_sudo() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde sudo konfigurieren"
@@ -145,6 +151,7 @@ konfiguriere_sudo() {
 # Deaktiviert Root-Login für
 # erhöhte Systemsicherheit
 # =========================================
+
 sperre_root_optional() {
   if [[ "$DISABLE_ROOT" != "yes" ]]; then
     log "Root bleibt aktiv."

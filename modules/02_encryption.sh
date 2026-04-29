@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 Arch Installer Modul
 # -----------------------------------------
@@ -29,6 +30,7 @@
 # Steuert optionales LUKS-Setup und setzt
 # korrektes Root-Device für Folgemodule
 # =========================================
+
 run_encryption_setup() {
   header "02 - Verschlüsselung"
 
@@ -59,6 +61,7 @@ run_encryption_setup() {
 # Validiert Root-Partition und stellt
 # sichere Voraussetzungen für LUKS sicher
 # =========================================
+
 pruefe_encryption_variablen() {
   [[ -n "${ROOT_PART:-}" ]] || { error "ROOT_PART ist nicht gesetzt."; exit 1; }
   [[ -n "${USE_LUKS:-}" ]] || { error "USE_LUKS ist nicht gesetzt."; exit 1; }
@@ -74,6 +77,7 @@ pruefe_encryption_variablen() {
 # Zeigt geplante Verschlüsselung und
 # Mapping-Struktur für Transparenz
 # =========================================
+
 zeige_luks_plan() {
   header "Geplanter LUKS-Aufbau"
 
@@ -93,6 +97,7 @@ zeige_luks_plan() {
 # Formatiert und öffnet verschlüsseltes
 # Root-Device mit sicherer Übergabe
 # =========================================
+
 richte_luks_ein() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde ${ROOT_PART} mit LUKS formatieren"

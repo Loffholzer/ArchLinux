@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 Arch Installer Modul
 # -----------------------------------------
@@ -17,13 +18,13 @@
 # 2. keine interaktiven Prompts
 # =========================================
 
-
 # =========================================
 # 🧰 CLI-Tools Setup orchestrieren
 # -----------------------------------------
 # Steuert Installation und Vorbereitung
 # moderner Kommandozeilen-Tools
 # =========================================
+
 run_tools_setup() {
   header "12 - CLI-Tools"
 
@@ -39,6 +40,7 @@ run_tools_setup() {
 # Zeigt geplante Tools nach Kategorien
 # für Transparenz vor Installation
 # =========================================
+
 zeige_tools_plan() {
   header "Geplante CLI-Tools"
 
@@ -64,6 +66,7 @@ zeige_tools_plan() {
 # Installiert definiertes Toolset und
 # initialisiert optionale Datenbanken
 # =========================================
+
 installiere_tools() {
   # htop/fastfetch entfernt (in Modul 11)
   # Wichtig: fzf hinzugefügt (essentiell für Fish/Zoxide Integration)

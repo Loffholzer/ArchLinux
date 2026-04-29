@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 Arch Installer Modul
 # -----------------------------------------
@@ -19,13 +20,13 @@
 # 3. idempotent bleiben
 # =========================================
 
-
 # =========================================
 # ⚡ Performance-Setup orchestrieren
 # -----------------------------------------
 # Steuert Pacman-Optimierungen und
 # optionale ZRAM-Konfiguration
 # =========================================
+
 run_perf_setup() {
   header "06 - Performance"
 
@@ -42,6 +43,7 @@ run_perf_setup() {
 # Zeigt geplante Pacman- und
 # System-Tweaks vor Anwendung
 # =========================================
+
 zeige_perf_plan() {
   header "Geplante Optimierungen"
 
@@ -61,6 +63,7 @@ zeige_perf_plan() {
 # Aktiviert ParallelDownloads, Farbe
 # und zusätzliche Pacman-UX-Optionen
 # =========================================
+
 optimiere_pacman() {
   local pacman_conf="/mnt/etc/pacman.conf"
 
@@ -104,6 +107,7 @@ optimiere_pacman() {
 # Installiert zram-generator und richtet
 # komprimierten RAM-Swap ein
 # =========================================
+
 installiere_zram() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde zram-generator installieren und konfigurieren"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 Arch Installer Modul
 # -----------------------------------------
@@ -18,13 +19,13 @@
 # 2. keine bestehenden configs zerstören
 # =========================================
 
-
 # =========================================
 # 🐚 Shell-Setup orchestrieren
 # -----------------------------------------
 # Steuert Installation und Konfiguration
 # von fish, starship und Shell-Umgebung
 # =========================================
+
 run_shell_setup() {
   header "11 - Shell"
 
@@ -44,6 +45,7 @@ run_shell_setup() {
 # Validiert Username und stellt sicher,
 # dass das Zielsystem gemountet ist
 # =========================================
+
 pruefe_shell_variablen() {
   [[ -n "${USERNAME:-}" ]] || { error "USERNAME fehlt."; exit 1; }
 
@@ -61,6 +63,7 @@ pruefe_shell_variablen() {
 # Zeigt geplante Shell, Tools und
 # Anpassungen vor Installation
 # =========================================
+
 zeige_shell_plan() {
   header "Geplante Shell-Konfiguration"
 
@@ -80,6 +83,7 @@ zeige_shell_plan() {
 # Installiert fish, starship und
 # unterstützende CLI-Utilities
 # =========================================
+
 installiere_shell_tools() {
   # Vollständige Liste aller in der config.fish genutzten Tools
   local packages=(
@@ -112,6 +116,7 @@ installiere_shell_tools() {
 # Setzt fish als Login-Shell für
 # Benutzer und optional root
 # =========================================
+
 setze_default_shell() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde fish als Default-Shell für $USERNAME und root setzen"
@@ -130,6 +135,7 @@ setze_default_shell() {
 # Aktiviert starship im fish-Setup
 # und stellt idempotente Konfiguration sicher
 # =========================================
+
 konfiguriere_starship() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde starship für fish aktivieren"
@@ -160,6 +166,7 @@ konfiguriere_starship() {
 # Erstellt zentrale config.fish mit
 # Aliases und Tool-Initialisierung
 # =========================================
+
 setze_aliases() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde config.fish für User und Root generieren"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 Arch Installer Modul
 # -----------------------------------------
@@ -17,13 +18,13 @@
 # 1. Config nicht doppelt schreiben
 # =========================================
 
-
 # =========================================
 # 📝 Editor-Setup orchestrieren
 # -----------------------------------------
 # Steuert Installation und Konfiguration
 # des Nano-Editors
 # =========================================
+
 run_editor_setup() {
   header "14 - Editor"
 
@@ -41,6 +42,7 @@ run_editor_setup() {
 # Stellt sicher, dass das Zielsystem
 # korrekt gemountet ist
 # =========================================
+
 pruefe_editor_variablen() {
   if [[ "${DRY_RUN:-true}" != true ]]; then
     mountpoint -q /mnt || {
@@ -56,6 +58,7 @@ pruefe_editor_variablen() {
 # Zeigt geplante Nano-Features
 # und Einstellungen
 # =========================================
+
 zeige_editor_plan() {
   header "Geplante Editor-Konfiguration"
 
@@ -75,6 +78,7 @@ zeige_editor_plan() {
 # -----------------------------------------
 # Installiert Nano im Zielsystem
 # =========================================
+
 installiere_nano() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde nano installieren"
@@ -92,6 +96,7 @@ installiere_nano() {
 # Ergänzt nanorc um sinnvolle Defaults
 # und aktiviert Syntax-Highlighting
 # =========================================
+
 konfiguriere_nano() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde nanorc konfigurieren"

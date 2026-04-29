@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 UI & Logging Bibliothek
 # -----------------------------------------
@@ -19,7 +20,6 @@
 # 2. keine Seiteneffekte
 # =========================================
 
-
 # =========================
 # 🎨 Farben & Logging
 # =========================
@@ -38,6 +38,7 @@ NC='\033[0m'
 # Gibt formatierte Informationsmeldungen
 # für normalen Ablauf aus
 # =========================================
+
 log()     { echo -e "${BLUE}[INFO]${NC} $1"; }
 
 # =========================================
@@ -46,6 +47,7 @@ log()     { echo -e "${BLUE}[INFO]${NC} $1"; }
 # Signalisiert erfolgreich abgeschlossene
 # Schritte im Installationsprozess
 # =========================================
+
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
 
 # =========================================
@@ -54,6 +56,7 @@ success() { echo -e "${GREEN}[OK]${NC} $1"; }
 # Zeigt nicht-kritische Probleme oder
 # Hinweise für den Benutzer an
 # =========================================
+
 warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 # =========================================
@@ -62,6 +65,7 @@ warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 # Signalisiert kritische Fehlerzustände
 # im Installationsprozess
 # =========================================
+
 error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # =========================================
@@ -69,6 +73,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 # -----------------------------------------
 # Hebt neue Installationsphasen visuell hervor
 # =========================================
+
 header() {
   echo
   echo -e "${BLUE}=== $1 ===${NC}"
@@ -80,6 +85,7 @@ header() {
 # Formatiert Zahlen für konsistente
 # Anzeige in Menüs
 # =========================================
+
 num() {
   echo -e "${YELLOW}${BOLD}$1${NC}"
 }
@@ -90,6 +96,7 @@ num() {
 # Gibt nummerierte Auswahloptionen
 # für Benutzerinteraktion aus
 # =========================================
+
 print_option() {
   local number="$1"
   local text="$2"
@@ -102,6 +109,7 @@ print_option() {
 # Formatiert Listen dynamisch in
 # mehrere Spalten je nach Terminalbreite
 # =========================================
+
 print_columns() {
   local -n items=$1
 
@@ -145,6 +153,7 @@ print_columns() {
 # Zeigt gefilterte Ergebnisse mit
 # Kontext und Navigation an
 # =========================================
+
 print_search_results() {
   local title="$1"
   local search="$2"
@@ -172,6 +181,7 @@ print_search_results() {
 # Ordnet Locales und stellt sicher,
 # dass en_US.UTF-8 zuletzt steht
 # =========================================
+
 format_locales() {
   declare -p LOCALES >/dev/null 2>&1 || return 0
 
@@ -204,6 +214,7 @@ format_locales() {
 # Zeigt aktuellen Fortschritt von
 # Keymap, Timezone und Locales
 # =========================================
+
 print_info_block() {
   local has_info=false
 
@@ -231,6 +242,7 @@ print_info_block() {
 # Kombiniert Statusanzeige mit neuem
 # Abschnitt für bessere Orientierung
 # =========================================
+
 phase_header() {
   clear
 

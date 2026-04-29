@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 Arch Installer Modul
 # -----------------------------------------
@@ -17,13 +18,13 @@
 # 2. Build nicht als root
 # =========================================
 
-
 # =========================================
 # 🏗️ AUR-Setup orchestrieren
 # -----------------------------------------
 # Steuert Installation und Konfiguration
 # des AUR-Helpers paru
 # =========================================
+
 run_aur_setup() {
   header "13 - AUR"
 
@@ -41,6 +42,7 @@ run_aur_setup() {
 # Validiert Benutzer und stellt sicher,
 # dass Zielsystem gemountet ist
 # =========================================
+
 pruefe_aur_variablen() {
   [[ -n "${USERNAME:-}" ]] || { error "USERNAME fehlt."; exit 1; }
 
@@ -58,6 +60,7 @@ pruefe_aur_variablen() {
 # Zeigt geplante Installation von paru
 # und Benutzerkontext
 # =========================================
+
 zeige_aur_plan() {
   header "Geplante AUR-Einrichtung"
 
@@ -75,6 +78,7 @@ zeige_aur_plan() {
 # Baut und installiert paru sicher
 # mit temporären sudo-Rechten
 # =========================================
+
 installiere_paru() {
   local sudoers_file="/mnt/etc/sudoers.d/10-installer"
 
@@ -132,6 +136,7 @@ installiere_paru() {
 # Setzt definierte Default-Optionen
 # für reproduzierbares Verhalten
 # =========================================
+
 konfiguriere_paru() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde paru konfigurieren (BottomUp, Color, SudoLoop, RemoveMake)"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 Arch Installer Modul
 # -----------------------------------------
@@ -18,13 +19,13 @@
 # 2. MUSS erfolgreich sein
 # =========================================
 
-
 # =========================================
 # 🧱 Finalisierung durchführen
 # -----------------------------------------
 # Baut finale initramfs und stellt sicher,
 # dass das System bootfähig ist
 # =========================================
+
 run_finalize() {
   header "99 - Finalisierung"
 

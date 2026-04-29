@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # =========================================
 # 📦 Arch Installer Modul
 # -----------------------------------------
@@ -18,13 +19,13 @@
 # 3. Paketliste deterministisch halten
 # =========================================
 
-
 # =========================================
 # 📦 Basissystem-Installation orchestrieren
 # -----------------------------------------
 # Steuert Installation des minimalen
 # Arch-Systems nach /mnt
 # =========================================
+
 run_base_install() {
   header "04 - Basissystem"
 
@@ -41,6 +42,7 @@ run_base_install() {
 # Stellt sicher, dass /mnt korrekt
 # gemountet ist vor pacstrap
 # =========================================
+
 pruefe_base_variablen() {
   if [[ "${DRY_RUN:-true}" != true ]]; then
     mountpoint -q /mnt || {
@@ -56,6 +58,7 @@ pruefe_base_variablen() {
 # Zeigt geplante Pakete für das
 # minimale Arch-Grundsystem
 # =========================================
+
 zeige_base_plan() {
   header "Geplante Installation"
 
@@ -78,6 +81,7 @@ zeige_base_plan() {
 # Führt pacstrap aus und installiert
 # Kernpakete ins Zielsystem
 # =========================================
+
 installiere_base() {
   local packages=(
     base
