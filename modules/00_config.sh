@@ -23,6 +23,8 @@
 AUTO_MODE="${AUTO_MODE:-false}"
 declare -a LOCALES=()
 
+CONSOLE_FONT="${CONSOLE_FONT:-ter-v28n}"
+
 set_default_config() {
   header "AUTO-MODE"
 
@@ -53,7 +55,7 @@ set_default_config() {
   INSTALL_EDITOR="yes"
   INSTALL_SSH="yes"
 
-  CONSOLE_FONT="ter-v32n"
+  CONSOLE_FONT="ter-v28n"
 }
 
 # =========================

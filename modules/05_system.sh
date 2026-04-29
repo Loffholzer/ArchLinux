@@ -161,7 +161,7 @@ konfiguriere_vconsole() {
 
   cat > /mnt/etc/vconsole.conf <<EOF
 KEYMAP=${KEYMAP}
-FONT=${CONSOLE_FONT:-ter-v32n}
+FONT=${CONSOLE_FONT:-ter-v28n}
 EOF
 }
 

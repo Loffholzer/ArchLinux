@@ -101,6 +101,8 @@ run_install() {
   [[ "$INSTALL_AUR" == "yes" ]]    && run_module "13_aur.sh" "run_aur_setup"
   [[ "$INSTALL_EDITOR" == "yes" ]] && run_module "14_editor.sh" "run_editor_setup"
 
+  run_module "99_finalize.sh" "run_finalize"
+
   run_final_hardening
 }
 
