@@ -148,8 +148,8 @@ konfiguriere_firewalld() {
 # =========================================
 # 🔐 SSH härten
 # -----------------------------------------
-# Deaktiviert root Login und begrenzt Auth
-# → reduziert Remote-Angriffsfläche
+# Erzwingt Pubkey-only SSH ohne Root-Login
+# → verhindert Passwort-Bruteforce nach Erstboot
 # =========================================
 
 konfiguriere_ssh() {
@@ -161,33 +161,36 @@ konfiguriere_ssh() {
   fi
 
   local conf="/mnt/etc/ssh/sshd_config"
+  local dropin_dir="/mnt/etc/ssh/sshd_config.d"
+  local hardening_conf="${dropin_dir}/99-installer-hardening.conf"
 
   [[ -f "$conf" ]] || {
     error "sshd_config nicht gefunden: $conf"
     exit 1
   }
 
-  log "Härte SSH-Konfiguration..."
+  install -d -m 755 "$dropin_dir"
 
-  sed -i -E 's/^[#[:space:]]*PermitRootLogin.*/PermitRootLogin no/' "$conf"
-  grep -qE '^PermitRootLogin[[:space:]]+no$' "$conf" || echo "PermitRootLogin no" >> "$conf"
+  cat > "$hardening_conf" <<'EOF'
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+MaxAuthTries 3
+LoginGraceTime 30
+X11Forwarding no
+AllowTcpForwarding no
+PermitTunnel no
+EOF
 
-  sed -i -E 's/^[#[:space:]]*PasswordAuthentication.*/PasswordAuthentication yes/' "$conf"
-  grep -qE '^PasswordAuthentication[[:space:]]+yes$' "$conf" || echo "PasswordAuthentication yes" >> "$conf"
-
-  sed -i -E 's/^[#[:space:]]*MaxAuthTries.*/MaxAuthTries 3/' "$conf"
-  grep -qE '^MaxAuthTries[[:space:]]+3$' "$conf" || echo "MaxAuthTries 3" >> "$conf"
-
-  sed -i -E 's/^[#[:space:]]*LoginGraceTime.*/LoginGraceTime 30/' "$conf"
-  grep -qE '^LoginGraceTime[[:space:]]+30$' "$conf" || echo "LoginGraceTime 30" >> "$conf"
-
-  sed -i -E 's/^[#[:space:]]*X11Forwarding.*/X11Forwarding no/' "$conf"
-  grep -qE '^X11Forwarding[[:space:]]+no$' "$conf" || echo "X11Forwarding no" >> "$conf"
+  chmod 644 "$hardening_conf"
 
   arch-chroot /mnt sshd -t || {
     error "sshd_config ist ungültig"
     exit 1
   }
+
+  success "SSH gehärtet: Root aus, Passwortlogin aus, Pubkey-only."
 }
 
 # =========================================

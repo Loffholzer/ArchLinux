@@ -43,7 +43,14 @@ NC='\033[0m'
 # → für nicht-kritische Ablaufinfos
 # =========================================
 
-log()     { echo -e "${BLUE}[INFO]${NC} $1"; }
+log() {
+  local msg="$1"
+  echo -e "${BLUE}[INFO]${NC} $msg"
+
+  if declare -F log_to_file >/dev/null; then
+    log_to_file "$msg"
+  fi
+}
 
 # =========================================
 # ✅ Erfolg ausgeben
@@ -61,7 +68,14 @@ success() { echo -e "${GREEN}[OK]${NC} $1"; }
 # → Benutzer muss mögliche Risiken sehen
 # =========================================
 
-warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
+warn() {
+  local msg="$1"
+  echo -e "${YELLOW}[WARN]${NC} $msg"
+
+  if declare -F log_to_file >/dev/null; then
+    log_to_file "WARN: $msg"
+  fi
+}
 
 # =========================================
 # ❌ Fehler ausgeben
@@ -70,7 +84,14 @@ warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 # → Aufrufer muss danach abbrechen
 # =========================================
 
-error()   { echo -e "${RED}[ERROR]${NC} $1"; }
+error() {
+  local msg="$1"
+  echo -e "${RED}[ERROR]${NC} $msg"
+
+  if declare -F log_to_file >/dev/null; then
+    log_to_file "ERROR: $msg"
+  fi
+}
 
 # =========================================
 # 📌 Header ausgeben

@@ -81,8 +81,13 @@ init_runtime() {
   STATE_FILE="${RUN_DIR}/state"
   LOG_FILE="${RUN_DIR}/install.log"
 
-  mkdir -p "$RUN_DIR"
-  touch "$LOG_FILE"
+  install -d -m 700 "$RUN_DIR"
+
+  if [[ ! -f "$LOG_FILE" ]]; then
+    install -m 600 /dev/null "$LOG_FILE"
+  else
+    chmod 600 "$LOG_FILE"
+  fi
 
   export RUN_DIR STATE_FILE LOG_FILE
 }
@@ -111,13 +116,24 @@ log_to_file() {
 
 set_state() {
   local state="$1"
+  local tmp_state
 
   [[ -n "${STATE_FILE:-}" ]] || {
     error "STATE_FILE ist nicht gesetzt."
     exit 1
   }
 
-  echo "$state" > "$STATE_FILE"
+  [[ -d "$(dirname "$STATE_FILE")" ]] || {
+    error "State-Verzeichnis existiert nicht: $(dirname "$STATE_FILE")"
+    exit 1
+  }
+
+  tmp_state="$(mktemp "${STATE_FILE}.tmp.XXXXXX")"
+
+  printf '%s\n' "$state" > "$tmp_state"
+  chmod 600 "$tmp_state"
+  mv -f "$tmp_state" "$STATE_FILE"
+
   log "Installationsstatus: $state"
   log_to_file "STATE ${state}"
 }
@@ -135,6 +151,45 @@ get_state() {
 }
 
 # =========================================
+# 🧹 Sicheres Unmount
+# -----------------------------------------
+# Unmountet nur Installer-eigene Mounts
+# → verhindert Eingriff in fremde Systeme
+# =========================================
+
+safe_umount() {
+  local target="$1"
+  local actual_source
+  local expected_sources=()
+
+  mountpoint -q "$target" || return 0
+
+  actual_source="$(findmnt -n -o SOURCE "$target" 2>/dev/null || true)"
+
+  [[ -n "$actual_source" ]] || {
+    warn "Mountquelle unbekannt: $target"
+    return 0
+  }
+
+  [[ -n "${ROOT_DEVICE:-}" ]] && expected_sources+=("$ROOT_DEVICE")
+  [[ -n "${EFI_PART:-}" ]] && expected_sources+=("$EFI_PART")
+
+  if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
+    expected_sources+=("/dev/mapper/${ROOT_MAPPER_NAME}")
+  fi
+
+  local expected
+  for expected in "${expected_sources[@]}"; do
+    if [[ "$actual_source" == "$expected" ]]; then
+      umount "$target" || warn "Konnte $target nicht unmounten."
+      return 0
+    fi
+  done
+
+  warn "Überspringe fremden Mount: $target ($actual_source)"
+}
+
+# =========================================
 # 🧹 Cleanup ausführen
 # -----------------------------------------
 # Räumt /mnt und cryptroot defensiv auf
@@ -145,21 +200,10 @@ cleanup() {
   warn "Cleanup läuft..."
   log_to_file "CLEANUP start"
 
-  if mountpoint -q /mnt/.snapshots; then
-    umount /mnt/.snapshots || warn "Konnte /mnt/.snapshots nicht unmounten."
-  fi
-
-  if mountpoint -q /mnt/home; then
-    umount /mnt/home || warn "Konnte /mnt/home nicht unmounten."
-  fi
-
-  if mountpoint -q /mnt/boot; then
-    umount /mnt/boot || warn "Konnte /mnt/boot nicht unmounten."
-  fi
-
-  if mountpoint -q /mnt; then
-    umount /mnt || warn "Konnte /mnt nicht unmounten."
-  fi
+  safe_umount /mnt/.snapshots
+  safe_umount /mnt/home
+  safe_umount /mnt/boot
+  safe_umount /mnt
 
   if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
     if cryptsetup status "$ROOT_MAPPER_NAME" >/dev/null 2>&1; then
@@ -173,10 +217,45 @@ cleanup() {
 trap cleanup EXIT
 
 # =========================================
+# 🔎 Modulstatus prüfen
+# -----------------------------------------
+# Prüft persistente Done-Marker pro Modul
+# → verhindert gefährliches erneutes Ausführen
+# =========================================
+
+module_done() {
+  local module="$1"
+  local marker="${RUN_DIR}/modules/${module}.done"
+
+  [[ -f "$marker" ]]
+}
+
+# =========================================
+# ✅ Modul als erledigt markieren
+# -----------------------------------------
+# Schreibt atomaren Done-Marker pro Modul
+# → ermöglicht sicheres Resume ohne Re-Run
+# =========================================
+
+mark_module_done() {
+  local module="$1"
+  local marker_dir="${RUN_DIR}/modules"
+  local marker="${marker_dir}/${module}.done"
+  local tmp_marker
+
+  install -d -m 700 "$marker_dir"
+
+  tmp_marker="$(mktemp "${marker}.tmp.XXXXXX")"
+  printf '%s\n' "$(date -Is)" > "$tmp_marker"
+  chmod 600 "$tmp_marker"
+  mv -f "$tmp_marker" "$marker"
+}
+
+# =========================================
 # ▶ Modul ausführen
 # -----------------------------------------
 # Lädt Modul, prüft Funktion und trackt State
-# → kapselt Modulstart deterministisch
+# → verhindert Re-Run bereits erledigter Module
 # =========================================
 
 run_module() {
@@ -193,6 +272,12 @@ run_module() {
     exit 1
   fi
 
+  if module_done "$module"; then
+    success "Überspringe ${module} (bereits erledigt)"
+    log_to_file "SKIP module=${module}"
+    return 0
+  fi
+
   unset -f "$function_name" 2>/dev/null || true
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
@@ -207,19 +292,16 @@ run_module() {
     exit 1
   fi
 
-  local last_state
-  last_state="$(get_state)"
-
-  # 🔥 Resume-Logik
-  if [[ "$last_state" == done:${module} ]]; then
-    success "Überspringe ${module} (bereits erledigt)"
-    return 0
-  fi
-
   set_state "running:${module}"
 
-  "$function_name"
+  if ! "$function_name"; then
+    set_state "failed:${module}"
+    log_to_file "FAILED module=${module}"
+    error "Modul fehlgeschlagen: ${module}"
+    exit 1
+  fi
 
+  mark_module_done "$module"
   set_state "done:${module}"
   log_to_file "DONE module=${module}"
 }
@@ -232,6 +314,15 @@ run_module() {
 # =========================================
 
 run_install() {
+  run_module "01_disk.sh" "run_disk_setup"
+  run_module "02_encryption.sh" "run_encryption_setup"
+  run_module "03_btrfs.sh" "run_btrfs_setup"
+  run_module "04_base.sh" "run_base_install"
+  run_module "05_system.sh" "run_system_config"
+  run_module "06_perf.sh" "run_perf_setup"
+  run_module "07_snapshots.sh" "run_snapshot_setup"
+  run_module "08_bootloader.sh" "run_bootloader_setup"
+
   run_module "09_user.sh" "run_user_setup"
   run_module "10_snapshot_boot.sh" "run_snapshot_boot_setup"
   run_module "15_network.sh" "run_network_setup"
@@ -270,6 +361,112 @@ run_final_hardening() {
 }
 
 # =========================================
+# 🔒 Installer-Lock setzen
+# -----------------------------------------
+# Verhindert parallele Installer-Läufe
+# → schützt vor Race Conditions und State-Korruption
+# =========================================
+
+acquire_lock() {
+  LOCK_FILE="/tmp/arch-installer.lock"
+
+  exec 9>"$LOCK_FILE" || {
+    error "Lock-Datei konnte nicht geöffnet werden: $LOCK_FILE"
+    exit 1
+  }
+
+  if ! flock -n 9; then
+    error "Installer läuft bereits. Parallelbetrieb ist unsicher."
+    exit 1
+  fi
+
+  export LOCK_FILE
+}
+
+# =========================================
+# 🧪 Preflight Checks
+# -----------------------------------------
+# Prüft kritische Voraussetzungen vor Start
+# → verhindert halbfertige Installationen
+# =========================================
+
+preflight_checks() {
+  log "Preflight Checks..."
+
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] überspringe Preflight Checks"
+    return 0
+  fi
+
+  # Internet prüfen
+  ping -c 1 -W 3 archlinux.org >/dev/null 2>&1 || {
+    error "Kein Internet oder archlinux.org nicht erreichbar."
+    exit 1
+  }
+
+  # Zeit synchronisieren (wichtig für pacman + TLS)
+  timedatectl set-ntp true >/dev/null 2>&1 || {
+    warn "Konnte NTP nicht aktivieren."
+  }
+
+  # Pacman Keyring aktualisieren
+  pacman -Sy --noconfirm archlinux-keyring >/dev/null 2>&1 || {
+    error "Keyring konnte nicht aktualisiert werden."
+    exit 1
+  }
+
+  success "Preflight Checks bestanden."
+}
+
+# =========================================
+# ⚙️ Runtime-Flags auswerten
+# -----------------------------------------
+# Erzwingt sicheren Standardmodus
+# → echte Ausführung nur mit explizitem --execute
+# =========================================
+
+parse_runtime_flags() {
+  DRY_RUN=true
+  AUTO_MODE=false
+  ALLOW_EXEC=false
+
+  local arg
+
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run)
+        DRY_RUN=true
+        ALLOW_EXEC=false
+        ;;
+      --execute)
+        DRY_RUN=false
+        ;;
+      --auto)
+        AUTO_MODE=true
+        ;;
+      *)
+        error "Unbekannter Parameter: $arg"
+        error "Erlaubt: --dry-run, --execute, --auto"
+        exit 1
+        ;;
+    esac
+  done
+
+  if [[ "$AUTO_MODE" == true && "$DRY_RUN" != true ]]; then
+    error "AUTO_MODE darf niemals mit echter Ausführung laufen."
+    exit 1
+  fi
+
+  if [[ "$DRY_RUN" == true ]]; then
+    ALLOW_EXEC=false
+  else
+    ALLOW_EXEC=true
+  fi
+
+  export DRY_RUN AUTO_MODE ALLOW_EXEC
+}
+
+# =========================================
 # 🧠 Einstiegspunkt ausführen
 # -----------------------------------------
 # Initialisiert Runtime, Config und Pipeline
@@ -277,17 +474,16 @@ run_final_hardening() {
 # =========================================
 
 main() {
+  parse_runtime_flags "$@"
+  acquire_lock
   init_runtime
+
+  preflight_checks
 
   collect_config
   validate_config
   export_config
   confirm_config
-
-  if [[ "${DRY_RUN:-true}" != true ]]; then
-    ALLOW_EXEC=true
-    export ALLOW_EXEC
-  fi
 
   run_install
 

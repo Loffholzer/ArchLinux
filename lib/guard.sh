@@ -139,6 +139,24 @@ guard_mountpoint_source() {
 }
 
 # =========================================
+# 🔐 Ausführung freigeben prüfen
+# -----------------------------------------
+# Erzwingt doppelte Freigabe für echte Befehle
+# → verhindert versehentliche Systemänderungen
+# =========================================
+
+guard_allow_exec() {
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    return 0
+  fi
+
+  [[ "${ALLOW_EXEC:-false}" == true ]] || {
+    error "Echte Ausführung blockiert: ALLOW_EXEC ist nicht true."
+    exit 1
+  }
+}
+
+# =========================================
 # 🧪 Befehl sicher ausführen
 # -----------------------------------------
 # Respektiert DRY_RUN und bricht bei Fehler ab
@@ -150,6 +168,8 @@ run_cmd() {
     warn "[DRY-RUN] $*"
     return 0
   fi
+
+  guard_allow_exec
 
   "$@" || {
     error "Befehl fehlgeschlagen: $*"

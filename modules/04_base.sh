@@ -98,6 +98,16 @@ pruefe_pacstrap_netwerk() {
     error "Kein Netzwerk oder archlinux.org nicht erreichbar."
     exit 1
   }
+
+  pacman -Sy --noconfirm archlinux-keyring >/dev/null 2>&1 || {
+    error "archlinux-keyring konnte vor pacstrap nicht aktualisiert werden."
+    exit 1
+  }
+
+  pacman -Syy --noconfirm >/dev/null 2>&1 || {
+    error "Pacman-Datenbanken konnten nicht aktualisiert werden."
+    exit 1
+  }
 }
 
 # =========================================
@@ -113,6 +123,7 @@ installiere_base() {
     base-devel
     btrfs-progs
     sudo
+    networkmanager
   )
 
   if [[ "${USE_LUKS:-no}" == "yes" ]]; then
@@ -123,14 +134,24 @@ installiere_base() {
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde pacstrap ausführen:"
-    warn "[DRY-RUN] pacstrap /mnt ${packages[*]}"
+    warn "[DRY-RUN] pacstrap -K /mnt ${packages[*]}"
     return 0
   fi
 
   log "Installiere Basissystem..."
 
-  pacstrap /mnt "${packages[@]}" || {
+  pacstrap -K /mnt "${packages[@]}" || {
     error "pacstrap fehlgeschlagen."
+    exit 1
+  }
+
+  [[ -x /mnt/bin/bash ]] || {
+    error "Basissystem unvollständig: /mnt/bin/bash fehlt."
+    exit 1
+  }
+
+  [[ -x /mnt/usr/bin/pacman ]] || {
+    error "Basissystem unvollständig: pacman fehlt."
     exit 1
   }
 }

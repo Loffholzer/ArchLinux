@@ -285,8 +285,8 @@ get_root_uuid() {
 # =========================================
 # 🧠 Kernel-Cmdline bauen
 # -----------------------------------------
-# Erstellt Root-/LUKS-Bootparameter
-# → falsche Cmdline verhindert Boot
+# Baut Root-/LUKS-Parameter strikt validiert
+# → verhindert Boot-Fail durch falsche UUID
 # =========================================
 
 build_cmdline() {
@@ -299,8 +299,15 @@ build_cmdline() {
   }
 
   if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
+    guard_require_var ROOT_BASE_DEVICE
+
     local crypt_uuid
     crypt_uuid="$(blkid -s UUID -o value "$ROOT_BASE_DEVICE")"
+
+    [[ -n "$crypt_uuid" ]] || {
+      error "crypt UUID fehlt"
+      exit 1
+    }
 
     echo "cryptdevice=UUID=${crypt_uuid}:${ROOT_MAPPER_NAME} root=/dev/mapper/${ROOT_MAPPER_NAME} rootflags=subvol=@ rw"
   else
@@ -311,8 +318,8 @@ build_cmdline() {
 # =========================================
 # 📝 Limine-Konfiguration schreiben
 # -----------------------------------------
-# Erstellt Bootmenü für Linux, LTS und Memtest
-# → zentrale Boot-Konfiguration
+# Erstellt Bootmenü inkl. Snapshot-Marker
+# → ermöglicht sichere spätere Recovery-Einträge
 # =========================================
 
 erstelle_limine_config() {
@@ -340,6 +347,11 @@ timeout: 5
     kernel_path: boot():/vmlinuz-linux-lts
     module_path: boot():/initramfs-linux-lts.img
     cmdline: ${cmdline}
+
+#+SNAPSHOT_ENTRIES_BEGIN
+/Snapshots
+    //Keine Snapshots vorhanden
+#+SNAPSHOT_ENTRIES_END
 EOF
 
   if [[ -n "$MEMTEST_PATH" ]]; then
@@ -355,8 +367,8 @@ EOF
 # =========================================
 # 🔥 Boot-Setup validieren
 # -----------------------------------------
-# Prüft Kernel, initramfs und EFI-Bootloader
-# → letzter Stop vor unbootbarem System
+# Prüft Kernel, initramfs, EFI und Konsistenz
+# → verhindert unbootbares System
 # =========================================
 
 validiere_boot_setup() {
@@ -374,8 +386,29 @@ validiere_boot_setup() {
     exit 1
   }
 
+  [[ -f /mnt/boot/vmlinuz-linux-lts ]] || {
+    error "LTS Kernel fehlt"
+    exit 1
+  }
+
+  [[ -f /mnt/boot/initramfs-linux-lts.img ]] || {
+    error "LTS initramfs fehlt"
+    exit 1
+  }
+
   [[ -f /mnt/boot/EFI/BOOT/BOOTX64.EFI ]] || {
     error "EFI Bootloader fehlt"
+    exit 1
+  }
+
+  # Limine Config prüfen
+  [[ -f /mnt/boot/limine.conf ]] || {
+    error "limine.conf fehlt"
+    exit 1
+  }
+
+  grep -q "protocol: linux" /mnt/boot/limine.conf || {
+    error "limine.conf enthält keine Linux-Einträge"
     exit 1
   }
 
