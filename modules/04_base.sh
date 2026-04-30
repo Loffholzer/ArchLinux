@@ -1,75 +1,127 @@
 #!/usr/bin/env bash
 
 # =========================================
-# 04_base.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
-# Aufgabe:
-# - installiert das Basissystem nach /mnt
-# - nutzt pacstrap
+# Name:      04_base.sh
+# Zweck:     Bootstrapping des Grundsystems
 #
-# Voraussetzung:
-# - /mnt ist gemountet (aus 03_btrfs.sh)
+# Aufgabe:
+# - Mount-Layout für Limine+LUKS optimieren
+# - Grundsystem, Kernel und Tools via pacstrap installieren
+# - FSTAB generieren und für Snapper (BTRFS) patchen
+#
+# Wichtig:
+# - Die ESP wird bei LUKS nach /boot gemountet
+# - Entfernt zwingend subvolid aus der fstab
 # =========================================
 
-# =========================
-# 🚀 Basissystem Setup ausführen
-# =========================
+# =========================================
+# 🔀 Funktion: base_boot_layout
+# -----------------------------------------
+# Zweck:    Sichert die Limine-Kompatibilität
+# Aufgabe:  Mountet ESP nach /boot bei LUKS-Setups
+# =========================================
+base_boot_layout() {
+    phase_header "Boot-Layout evaluieren"
 
-run_base_install() {
-  header "04 - Basissystem"
+    if [[ "$USE_LUKS" == "yes" ]]; then
+        log "LUKS-Profil aktiv: Optimiere Mount-Point für Limine."
 
-  pruefe_base_variablen
-  zeige_base_plan
-  installiere_base
+        if [[ "${DRY_RUN:-true}" == true ]]; then
+            warn "[DRY-RUN] Remount ESP von /boot/efi nach /boot übersprungen."
+        else
+            log "Hänge ESP von /mnt/boot/efi aus..."
+            umount /mnt/boot/efi 2>/dev/null || true
 
-  success "Basissystem installiert."
+            log "Mounte ESP direkt nach /mnt/boot..."
+            mkdir -p /mnt/boot
+            mount "$PART_EFI" /mnt/boot
+            success "ESP ist nun unter /mnt/boot gemountet (Kernel wird unverschlüsselt abgelegt)."
+        fi
+    else
+        log "Standard-Profil aktiv: /mnt/boot/efi bleibt erhalten (Limine liest Kernel aus BTRFS)."
+    fi
 }
 
-# =========================
-# 🔒 Checks
-# =========================
+# =========================================
+# 📥 Funktion: base_pacstrap
+# -----------------------------------------
+# Zweck:    Installation des Kernsystems
+# Aufgabe:  Lädt Pakete in die chroot-Umgebung
+# =========================================
+base_pacstrap() {
+    phase_header "Pacstrap: Grundsystem installieren"
 
-pruefe_base_variablen() {
-  if [[ "${DRY_RUN:-true}" != true ]]; then
-    mountpoint -q /mnt || {
-      error "/mnt ist nicht gemountet. Abbruch."
-      exit 1
+    local base_pkgs=(
+        base base-devel
+        linux linux-headers linux-lts linux-lts-headers
+        linux-firmware "$MICROCODE_PKG"
+        btrfs-progs
+        networkmanager
+        sudo neovim git curl wget
+        cryptsetup lvm2 # Zwingend für LUKS-Hooks
+    )
+
+    log "Installiere folgende Pakete:"
+    echo -e "${CYAN}${base_pkgs[*]}${NC}\n"
+
+    if [[ "${DRY_RUN:-true}" == true ]]; then
+        warn "[DRY-RUN] pacstrap wird übersprungen."
+        return 0
+    fi
+
+    # pacstrap ausführen
+    pacstrap -K /mnt "${base_pkgs[@]}" || {
+        error "Pacstrap fehlgeschlagen. Netzwerkverbindung oder Mirrorlist prüfen."
+        exit 1
     }
-  fi
+
+    success "Grundsystem erfolgreich installiert."
 }
 
-# =========================
-# 📋 Plan anzeigen
-# =========================
-zeige_base_plan() {
-  header "Geplante Installation"
+# =========================================
+# 📝 Funktion: base_fstab
+# -----------------------------------------
+# Zweck:    Generiert die Dateisystem-Tabelle
+# Aufgabe:  Nutzt UUIDs und patcht subvolid für Snapper
+# =========================================
+base_fstab() {
+    phase_header "FSTAB generieren & patchen"
 
-  echo "Pakete:"
-  echo "  base"
-  echo "  base-devel"
-  echo "  btrfs-progs"
-  echo
+    if [[ "${DRY_RUN:-true}" == true ]]; then
+        warn "[DRY-RUN] genfstab wird übersprungen."
+        return 0
+    fi
 
-  warn "Dieses Modul installiert das Basissystem nach /mnt."
-  warn "Kernel, Firmware, Limine und Memtest folgen in 08_bootloader.sh."
-  echo
+    log "Generiere fstab (UUID-basiert)..."
+    genfstab -U /mnt > /mnt/etc/fstab || {
+        error "FSTAB konnte nicht generiert werden."
+        exit 1
+    }
+
+    log "Optimiere fstab für BTRFS-Rollbacks (Entferne subvolid)..."
+    sed -i 's/subvolid=[0-9]*,//g' /mnt/etc/fstab
+    sed -i 's/,subvolid=[0-9]*//g' /mnt/etc/fstab
+
+    # FSTAB-Ausgabe ins Log zur Validierung
+    echo
+    cat /mnt/etc/fstab
+    echo
+
+    success "FSTAB erfolgreich erstellt und gepatcht."
 }
 
-# =========================
-# 📦 Installation
-# =========================
+# =========================================
+# ⚙️ Modul-Einstiegspunkt: run_base
+# -----------------------------------------
+# Zweck:    Sequenzielle Ausführung
+# =========================================
+run_base() {
+    header "Phase 4: Base System (Pacstrap)"
 
-installiere_base() {
-  if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde pacstrap ausführen:"
-    warn "[DRY-RUN] pacstrap /mnt base base-devel btrfs-progs"
-    return 0
-  fi
-
-  log "Installiere Basissystem (inkl. BTRFS-Tools)..."
-
-  pacstrap /mnt base base-devel btrfs-progs || {
-    error "pacstrap fehlgeschlagen."
-    exit 1
-  }
+    base_boot_layout
+    base_pacstrap
+    base_fstab
 }
+
