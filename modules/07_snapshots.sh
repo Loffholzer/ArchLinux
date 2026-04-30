@@ -77,7 +77,8 @@ zeige_snapshot_plan() {
 # =========================================
 # 🔍 Snapshot-Struktur prüfen
 # -----------------------------------------
-# Validiert /.snapshots als BTRFS-Subvolume
+# Validiert /.snapshots als korrektes BTRFS-Subvolume
+# → akzeptiert subvol=@snapshots und subvol=/@snapshots
 # → verhindert defektes Recovery-Layout
 # =========================================
 
@@ -86,23 +87,44 @@ validiere_snapshot_struktur() {
     return 0
   fi
 
-  # .snapshots muss existieren
+  guard_require_var ROOT_DEVICE
+  guard_mnt_valid_root
+
   [[ -d /mnt/.snapshots ]] || {
     error "/mnt/.snapshots existiert nicht"
     exit 1
   }
 
-  # Muss BTRFS sein
-  findmnt -n -o FSTYPE /mnt/.snapshots | grep -qx "btrfs" || {
-    error "/mnt/.snapshots ist kein BTRFS"
+  mountpoint -q /mnt/.snapshots || {
+    error "/mnt/.snapshots ist kein eigener Mountpoint"
     exit 1
   }
 
-  # Muss korrektes Subvolume sein
-  findmnt -n -o OPTIONS /mnt/.snapshots | grep -q "subvol=@snapshots" || {
-    error "@snapshots Subvolume nicht korrekt gemountet"
+  local fstype
+  local source
+  local options
+
+  fstype="$(findmnt -n -o FSTYPE /mnt/.snapshots 2>/dev/null || true)"
+  source="$(findmnt -n -o SOURCE /mnt/.snapshots 2>/dev/null || true)"
+  options="$(findmnt -n -o OPTIONS /mnt/.snapshots 2>/dev/null || true)"
+
+  [[ "$fstype" == "btrfs" ]] || {
+    error "/mnt/.snapshots ist kein BTRFS-Dateisystem"
     exit 1
   }
+
+  [[ "$source" == "$ROOT_DEVICE" || "$source" == "$ROOT_DEVICE["* ]] || {
+    error "/mnt/.snapshots zeigt auf falsche Quelle: $source statt $ROOT_DEVICE"
+    exit 1
+  }
+
+  [[ "$options" == *"subvol=@snapshots"* || "$options" == *"subvol=/@snapshots"* ]] || {
+    error "@snapshots Subvolume nicht korrekt gemountet"
+    error "Aktuelle Mountoptionen: $options"
+    exit 1
+  }
+
+  success "@snapshots korrekt gemountet."
 }
 
 # =========================================
