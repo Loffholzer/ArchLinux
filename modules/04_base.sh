@@ -61,6 +61,7 @@ base_pacstrap() {
         networkmanager
         sudo neovim git curl wget
         cryptsetup lvm2 # Zwingend für LUKS-Hooks
+        terminus-font   # FIX: Wird zwingend für den consolefont-Hook im mkinitcpio benötigt
     )
 
     log "Installiere folgende Pakete:"
@@ -70,6 +71,11 @@ base_pacstrap() {
         warn "[DRY-RUN] pacstrap wird übersprungen."
         return 0
     fi
+
+    # FIX: Verhindere den 'vconsole.conf not found' Fehler beim automatischen mkinitcpio-Lauf
+    log "Bereite Dummy-Configs für pacstrap-Hooks vor..."
+    mkdir -p /mnt/etc
+    touch /mnt/etc/vconsole.conf
 
     # pacstrap ausführen
     pacstrap -K /mnt "${base_pkgs[@]}" || {

@@ -77,7 +77,7 @@ serv_btrfs_maintenance() {
 # 📸 Funktion: serv_snapper
 # -----------------------------------------
 # Zweck:    System-Rollback Infrastruktur
-# Aufgabe:  Snapper-Workaround anwenden und Configs setzen
+# Aufgabe:  Snapper manuell konfigurieren (ohne DBus)
 # =========================================
 serv_snapper() {
     phase_header "Zielsystem: Snapper & Rollbacks"
@@ -90,17 +90,18 @@ serv_snapper() {
     log "Installiere snapper und snap-pac..."
     arch-chroot /mnt pacman -S --noconfirm snapper snap-pac >/dev/null 2>&1
 
-    log "Führe Snapper-Workaround für existierendes Subvolume durch..."
-    umount /mnt/.snapshots 2>/dev/null || true
-    rm -rf /mnt/.snapshots
+    # FIX: DBus Bypass. Config manuell kopieren und anlegen.
+    log "Erstelle Snapper-Config manuell (Bypass für chroot DBus-Fehler)..."
+    mkdir -p /mnt/etc/snapper/configs
+    cp /mnt/usr/share/snapper/config-templates/default /mnt/etc/snapper/configs/root
 
-    # Erstelle Config (Snapper legt neues /.snapshots Subvolume an)
-    arch-chroot /mnt snapper -c root create-config /
+    # Registriere die neue 'root'-Config im System
+    mkdir -p /mnt/etc/conf.d
+    echo 'SNAPPER_CONFIGS="root"' > /mnt/etc/conf.d/snapper
 
-    # Lösche Snappers Subvolume und mounte unser eigenes @snapshots
-    btrfs subvolume delete /mnt/.snapshots >/dev/null 2>&1
-    mkdir -p /mnt/.snapshots
-    mount -a # Zieht FSTAB neu, mountet @snapshots zurück
+    # Setze BTRFS Subvolume-Referenz und erlaube der wheel-Gruppe den Zugriff
+    sed -i 's/^SUBVOLUME=.*/SUBVOLUME="\/"/' /mnt/etc/snapper/configs/root
+    sed -i 's/^ALLOW_GROUPS=.*/ALLOW_GROUPS="wheel"/' /mnt/etc/snapper/configs/root
 
     log "Passe Snapper-Retention (Speicherplatz) an..."
     sed -i 's/^TIMELINE_LIMIT_HOURLY.*/TIMELINE_LIMIT_HOURLY="5"/' /mnt/etc/snapper/configs/root
@@ -115,7 +116,7 @@ serv_snapper() {
     # Erstelle den Limine-Sync Hook
     _create_limine_hook
 
-    success "Snapper erfolgreich integriert."
+    success "Snapper erfolgreich manuell konfiguriert und integriert."
 }
 
 # =========================================
@@ -123,9 +124,6 @@ serv_snapper() {
 # -----------------------------------------
 # Zweck:    Automatisches Boot-Menü Update
 # Aufgabe:  Schreibt Sync-Skript und Pacman-Hook
-# =========================================
-# =========================================
-# 🪝 Helper: _create_limine_hook
 # =========================================
 _create_limine_hook() {
     log "Erstelle Limine-Snapper Sync Skript..."
@@ -138,7 +136,7 @@ _create_limine_hook() {
 LIMINE_CONF=$(find /boot -maxdepth 2 -name "limine.conf" | head -n 1)
 [[ -z "$LIMINE_CONF" ]] && exit 0
 
-# Finde den Main-Eintrag in limine.conf um Parameter (LUKS UUIDs etc) zu kopieren
+# Finde den Main-Eintrag in limine.conf um Parameter dynamisch zu kopieren
 CMDLINE=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "CMDLINE" | head -n 1 | cut -d '=' -f 2-)
 PROTOCOL=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "PROTOCOL" | head -n 1 | cut -d '=' -f 2-)
 KERNEL_PATH=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "KERNEL_PATH" | head -n 1 | cut -d '=' -f 2-)
@@ -155,7 +153,7 @@ snapper -c root list | tail -n +3 | tail -n 5 | while read -r line; do
     snap_num=$(echo "$line" | awk '{print $1}' | tr -d '*')
     snap_date=$(echo "$line" | awk '{print $3, $4, $5, $6}')
 
-    # Ersetze Pfade dynamisch für BTRFS-Rollbacks (greift bei Limine Standard & LUKS Profil)
+    # FIX: Ersetze Pfade dynamisch (Limine Standard & LUKS Kompatibilität)
     SNAP_CMDLINE=$(echo "$CMDLINE" | sed "s|subvol=@|subvol=@snapshots/$snap_num/snapshot|")
     SNAP_KERNEL=$(echo "$KERNEL_PATH" | sed "s|/@/|/@snapshots/$snap_num/snapshot/|")
     SNAP_MODULE=$(echo "$MODULE_PATH" | sed "s|/@/|/@snapshots/$snap_num/snapshot/|")

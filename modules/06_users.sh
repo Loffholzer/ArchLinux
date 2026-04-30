@@ -48,7 +48,8 @@ users_accounts() {
 
     log "Konfiguriere Sudo (Wheel-Group)..."
     echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/wheel
-    chmod 0440 /mnt/etc/sudoers.d/wheel # FIX: Zwingende Berechtigung für Sudo
+    # FIX: Zwingende Berechtigung für Sudo, sonst wirft es Fehler
+    chmod 0440 /mnt/etc/sudoers.d/wheel
 
     success "Benutzerverwaltung abgeschlossen."
 }
@@ -149,10 +150,10 @@ users_shell_ux() {
     fi
 
     log "Installiere UX-Pakete..."
-    # terminus-font für TTY, ttf-jetbrains-mono-nerd für GUI
+    # FIX: terminus-font entfernt (wird nun in base_pacstrap installiert)
     arch-chroot /mnt pacman -S --noconfirm \
         fish starship zoxide fastfetch eza bat btop \
-        ttf-jetbrains-mono-nerd terminus-font >/dev/null
+        ttf-jetbrains-mono-nerd >/dev/null
 
     log "Setze Fish als Standard-Shell für User und Root..."
     arch-chroot /mnt chsh -s /usr/bin/fish "$USERNAME"
@@ -263,6 +264,7 @@ users_aur() {
     echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > /mnt/etc/sudoers.d/wheel
     chmod 0440 /mnt/etc/sudoers.d/wheel
 
+    # Der Build-Prozess darf nicht als root laufen. Wir wechseln per sudo -u.
     arch-chroot /mnt sudo -u "$USERNAME" bash -c '
         cd ~
         git clone https://aur.archlinux.org/paru-bin.git

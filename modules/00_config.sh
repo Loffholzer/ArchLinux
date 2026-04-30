@@ -24,20 +24,24 @@
 # 4. Secrets nie ausgeben oder loggen
 # =========================================
 
-# =========================
+# =========================================
 # 🤖 Presets / AUTO-MODE
-# =========================
+# -----------------------------------------
+# Zweck:    Globale Variablen-Initialisierung
+# Aufgabe:  Setzt HD-optimierten Konsolen-Font
+# =========================================
 
 AUTO_MODE="${AUTO_MODE:-false}"
 declare -a LOCALES=()
 
-CONSOLE_FONT="${CONSOLE_FONT:-ter-v28n}"
+# ter-v32n ist die optimale, gut lesbare Größe für Full HD (1080p) Displays
+CONSOLE_FONT="${CONSOLE_FONT:-ter-v32n}"
 
 # =========================================
 # 🤖 AUTO_MODE Defaults setzen
 # -----------------------------------------
-# Setzt Testwerte für nicht-interaktive Runs
-# → nur mit DRY_RUN sicher zulässig
+# Zweck:    Setzt Testwerte für nicht-interaktive Runs
+# Aufgabe:  Lädt Standardwerte (inkl. neuem Font)
 # =========================================
 set_default_config() {
   header "AUTO-MODE"
@@ -69,7 +73,7 @@ set_default_config() {
   INSTALL_EDITOR="yes"
   INSTALL_SSH="yes"
 
-  CONSOLE_FONT="ter-v28n"
+  CONSOLE_FONT="ter-v32n"
 }
 
 # =========================================
