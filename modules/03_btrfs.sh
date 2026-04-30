@@ -25,9 +25,11 @@
 # =========================================
 
 # =========================================
-# 🧩 BTRFS-Setup ausführen (FINAL)
+# 🧩 BTRFS-Setup ausführen
 # -----------------------------------------
-# Erstellt Dateisystem + Mount + LUKS Backup
+# Erstellt Dateisystem, Subvolumes, Mounts
+# und sichert bei LUKS den Header
+# → bereitet /mnt für pacstrap vor
 # =========================================
 
 run_btrfs_setup() {

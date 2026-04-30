@@ -167,17 +167,28 @@ richte_luks_ein() {
 # =========================================
 
 backup_luks_header() {
-  local backup="/mnt/root/luks-header.img"
+  local backup_dir="/mnt/root"
+  local backup="${backup_dir}/luks-header.img"
+
+  if [[ "${DRY_RUN:-true}" == true ]]; then
+    warn "[DRY-RUN] würde LUKS Header sichern: ${backup}"
+    return 0
+  fi
 
   guard_require_var ROOT_PART
+  guard_block_device "$ROOT_PART"
+  guard_mnt_valid_root
+
+  install -d -m 700 "$backup_dir"
 
   cryptsetup luksHeaderBackup "$ROOT_PART" --header-backup-file "$backup" || {
-    error "LUKS Header Backup fehlgeschlagen"
+    error "LUKS Header Backup fehlgeschlagen: $backup"
     exit 1
   }
 
   chmod 600 "$backup"
-  sync
+  sync -f "$backup" 2>/dev/null || sync
+  sync -f "$backup_dir" 2>/dev/null || sync
 
   success "LUKS Header gesichert: $backup"
 }

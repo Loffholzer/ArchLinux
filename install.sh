@@ -247,7 +247,8 @@ mark_module_done() {
 # ▶ Modul ausführen
 # -----------------------------------------
 # Lädt Modul, prüft Funktion und trackt State
-# → verhindert Re-Run bereits erledigter Module
+# → führt Module deterministisch immer aus
+# → vermeidet kaputtes Resume nach Cleanup
 # =========================================
 
 run_module() {
@@ -262,12 +263,6 @@ run_module() {
     error "Modul nicht gefunden: ${module}"
     log_to_file "ERROR module missing: ${module}"
     exit 1
-  fi
-
-  if module_done "$module"; then
-    success "Überspringe ${module} (bereits erledigt)"
-    log_to_file "SKIP module=${module}"
-    return 0
   fi
 
   unset -f "$function_name" 2>/dev/null || true
