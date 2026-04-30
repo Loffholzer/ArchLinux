@@ -123,7 +123,7 @@ serv_snapper() {
 # 🪝 Helper: _create_limine_hook
 # -----------------------------------------
 # Zweck:    Automatisches Boot-Menü Update
-# Aufgabe:  Schreibt Sync-Skript und Pacman-Hook
+# Aufgabe:  Schreibt Sync-Skript und Pacman-Hook (Limine v8+)
 # =========================================
 _create_limine_hook() {
     log "Erstelle Limine-Snapper Sync Skript..."
@@ -136,11 +136,11 @@ _create_limine_hook() {
 LIMINE_CONF=$(find /boot -maxdepth 2 -name "limine.conf" | head -n 1)
 [[ -z "$LIMINE_CONF" ]] && exit 0
 
-# Finde den Main-Eintrag in limine.conf um Parameter dynamisch zu kopieren
-CMDLINE=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "CMDLINE" | head -n 1 | cut -d '=' -f 2-)
-PROTOCOL=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "PROTOCOL" | head -n 1 | cut -d '=' -f 2-)
-KERNEL_PATH=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "KERNEL_PATH" | head -n 1 | cut -d '=' -f 2-)
-MODULE_PATH=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "MODULE_PATH" | head -n 1 | cut -d '=' -f 2-)
+# Finde den Main-Eintrag in limine.conf um Parameter dynamisch zu kopieren (Limine v8 Regex)
+CMDLINE=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "cmdline:" | head -n 1 | sed 's/^[ \t]*cmdline:[ \t]*//')
+PROTOCOL=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "protocol:" | head -n 1 | sed 's/^[ \t]*protocol:[ \t]*//')
+KERNEL_PATH=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "kernel_path:" | head -n 1 | sed 's/^[ \t]*kernel_path:[ \t]*//')
+MODULE_PATH=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "module_path:" | head -n 1 | sed 's/^[ \t]*module_path:[ \t]*//')
 
 # Entferne alte Snapshot-Einträge (alles nach der Trennlinie)
 sed -i '/^# === SNAPSHOTS ===/,$d' "$LIMINE_CONF"
@@ -153,18 +153,18 @@ snapper -c root list | tail -n +3 | tail -n 5 | while read -r line; do
     snap_num=$(echo "$line" | awk '{print $1}' | tr -d '*')
     snap_date=$(echo "$line" | awk '{print $3, $4, $5, $6}')
 
-    # FIX: Ersetze Pfade dynamisch (Limine Standard & LUKS Kompatibilität)
+    # Ersetze Pfade dynamisch (Limine Standard & LUKS Kompatibilität)
     SNAP_CMDLINE=$(echo "$CMDLINE" | sed "s|subvol=@|subvol=@snapshots/$snap_num/snapshot|")
     SNAP_KERNEL=$(echo "$KERNEL_PATH" | sed "s|/@/|/@snapshots/$snap_num/snapshot/|")
     SNAP_MODULE=$(echo "$MODULE_PATH" | sed "s|/@/|/@snapshots/$snap_num/snapshot/|")
 
     cat <<ENTRY >> "$LIMINE_CONF"
 
-:Snapshot #$snap_num ($snap_date)
-    PROTOCOL=$PROTOCOL
-    KERNEL_PATH=$SNAP_KERNEL
-    MODULE_PATH=$SNAP_MODULE
-    CMDLINE=$SNAP_CMDLINE
+/Snapshot #$snap_num ($snap_date)
+    protocol: $PROTOCOL
+    kernel_path: $SNAP_KERNEL
+    module_path: $SNAP_MODULE
+    cmdline: $SNAP_CMDLINE
 ENTRY
 done
 EOF

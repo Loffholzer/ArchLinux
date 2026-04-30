@@ -124,50 +124,47 @@ env_bootloader() {
     log "Installiere Limine Paket..."
     arch-chroot /mnt pacman -S --noconfirm limine >/dev/null
 
-    log "Generiere limine.conf..."
+    log "Generiere limine.conf (Limine v8+ Syntax)..."
     # Pfade und CMDLINE dynamisch je nach LUKS-Status anpassen
     local limine_conf="/mnt/boot/limine.conf"
     if [[ "$USE_LUKS" == "yes" ]]; then
         # LUKS: conf liegt in /boot (welches unsere ESP ist)
-        # Kernel ist im Root der ESP
         cat <<EOF > "$limine_conf"
-TIMEOUT=3
-REMEMBER_LAST_ENTRY=yes
-DEFAULT_ENTRY=1
+timeout: 3
+remember_last_entry: yes
+default_entry: 1
 
-:Arch Linux (Mainline)
-    PROTOCOL=linux
-    KERNEL_PATH=boot:///vmlinuz-linux
-    MODULE_PATH=boot:///initramfs-linux.img
-    # Hinzugefügt: loglevel=3 udev.log_level=3 für absolutes Schweigen vor dem Passwort
-    CMDLINE=cryptdevice=UUID=${root_uuid}:cryptroot root=/dev/mapper/cryptroot rootflags=subvol=@ rw quiet loglevel=3 udev.log_level=3
+/Arch Linux (Mainline)
+    protocol: linux
+    kernel_path: boot():/vmlinuz-linux
+    module_path: boot():/initramfs-linux.img
+    cmdline: cryptdevice=UUID=${root_uuid}:cryptroot root=/dev/mapper/cryptroot rootflags=subvol=@ rw quiet loglevel=3 udev.log_level=3
 
-:Arch Linux (LTS)
-    PROTOCOL=linux
-    KERNEL_PATH=boot:///vmlinuz-linux-lts
-    MODULE_PATH=boot:///initramfs-linux-lts.img
-    CMDLINE=cryptdevice=UUID=${root_uuid}:cryptroot root=/dev/mapper/cryptroot rootflags=subvol=@ rw quiet loglevel=3 udev.log_level=3
+/Arch Linux (LTS)
+    protocol: linux
+    kernel_path: boot():/vmlinuz-linux-lts
+    module_path: boot():/initramfs-linux-lts.img
+    cmdline: cryptdevice=UUID=${root_uuid}:cryptroot root=/dev/mapper/cryptroot rootflags=subvol=@ rw quiet loglevel=3 udev.log_level=3
 EOF
     else
         # Standard: conf liegt in /boot/efi (unsere ESP)
-        # Kernel liegt auf BTRFS
         limine_conf="/mnt/boot/efi/limine.conf"
         cat <<EOF > "$limine_conf"
-TIMEOUT=3
-REMEMBER_LAST_ENTRY=yes
-DEFAULT_ENTRY=1
+timeout: 3
+remember_last_entry: yes
+default_entry: 1
 
-:Arch Linux (Mainline)
-    PROTOCOL=linux
-    KERNEL_PATH=uuid://${root_uuid}/@/boot/vmlinuz-linux
-    MODULE_PATH=uuid://${root_uuid}/@/boot/initramfs-linux.img
-    CMDLINE=root=UUID=${root_uuid} rootflags=subvol=@ rw quiet splash
+/Arch Linux (Mainline)
+    protocol: linux
+    kernel_path: uuid(${root_uuid}):/@/boot/vmlinuz-linux
+    module_path: uuid(${root_uuid}):/@/boot/initramfs-linux.img
+    cmdline: root=UUID=${root_uuid} rootflags=subvol=@ rw quiet splash
 
-:Arch Linux (LTS)
-    PROTOCOL=linux
-    KERNEL_PATH=uuid://${root_uuid}/@/boot/vmlinuz-linux-lts
-    MODULE_PATH=uuid://${root_uuid}/@/boot/initramfs-linux-lts.img
-    CMDLINE=root=UUID=${root_uuid} rootflags=subvol=@ rw quiet splash
+/Arch Linux (LTS)
+    protocol: linux
+    kernel_path: uuid(${root_uuid}):/@/boot/vmlinuz-linux-lts
+    module_path: uuid(${root_uuid}):/@/boot/initramfs-linux-lts.img
+    cmdline: root=UUID=${root_uuid} rootflags=subvol=@ rw quiet splash
 EOF
     fi
 

@@ -812,7 +812,7 @@ confirm_config() {
       echo
     fi
 
-    warn "Achtung: Alle Daten auf $DISK können gelöscht werden."
+    warn "Achtung: Alle Daten auf $DISK werden unwiderruflich gelöscht."
     echo
 
     if [[ "$(ask_yes_no "Sind diese Angaben korrekt?")" == "yes" ]]; then
