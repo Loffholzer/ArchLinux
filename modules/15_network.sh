@@ -187,16 +187,17 @@ konfiguriere_firewalld() {
 # =========================================
 # 🔐 SSH härten
 # -----------------------------------------
-# Erzwingt sichere SSH-Defaults nur dann,
-# wenn ein Public-Key vorhanden ist
-# → verhindert SSH-Lockout nach Erstboot
+# Schreibt sichere SSH-Defaults und erzeugt
+# fehlende Hostkeys im Zielsystem
+# → verhindert sshd -t Fehler im chroot
+# → vermeidet Root-Login und Lockout
 # =========================================
 
 konfiguriere_ssh() {
   [[ "${INSTALL_SSH:-no}" != "yes" ]] && return 0
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde SSH härten"
+    warn "[DRY-RUN] würde SSH härten und Hostkeys erzeugen"
     return 0
   fi
 
@@ -215,6 +216,13 @@ konfiguriere_ssh() {
   }
 
   install -d -m 755 "$dropin_dir"
+
+  # Hostkeys existieren im frisch installierten Zielsystem oft noch nicht.
+  # Ohne Hostkeys schlägt `sshd -t` fehl, obwohl die Config korrekt ist.
+  arch-chroot /mnt ssh-keygen -A || {
+    error "SSH Hostkeys konnten nicht erzeugt werden"
+    exit 1
+  }
 
   if [[ ! -s "$auth_keys" ]]; then
     warn "Kein SSH authorized_keys gefunden."
@@ -237,6 +245,8 @@ EOF
       error "sshd_config ist ungültig"
       exit 1
     }
+
+    sync -f "$hardening_conf" 2>/dev/null || sync
 
     success "SSH sicher konfiguriert: Root-Login aus, Passwortlogin bleibt als Fallback aktiv."
     return 0
@@ -264,6 +274,8 @@ EOF
     error "sshd_config ist ungültig"
     exit 1
   }
+
+  sync -f "$hardening_conf" 2>/dev/null || sync
 
   success "SSH gehärtet: Root aus, Pubkey-only aktiv."
 }
