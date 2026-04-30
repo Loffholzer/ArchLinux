@@ -541,52 +541,84 @@ select_locale_manual() {
 }
 
 # =========================================
-# 💽 Sichere Laufwerksauswahl (FINAL)
+# 💽 Sichere Laufwerksauswahl
 # -----------------------------------------
-# Filtert Systemdisk + zeigt alle realen Targets
-# → verhindert Selbstzerstörung + erlaubt USB
+# Erkennt reale Zielgeräte robust auf ArchISO
+# → verhindert Abbruch durch Overlay-/Live-System
+# → erlaubt SATA, NVMe, MMC und USB-Ziele
 # =========================================
 
 select_disk() {
-  local choice entry root_parent
+  local choice entry
+  local root_source=""
+  local root_parent=""
+  local dev=""
+  local i=1
 
   phase_header "Ziellaufwerk auswählen"
 
-  root_parent="$(lsblk -no PKNAME "$(findmnt -n -o SOURCE /)" 2>/dev/null | head -n1)"
-  root_parent="/dev/${root_parent}"
+  root_source="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+
+  if [[ -n "$root_source" && -b "$root_source" ]]; then
+    root_parent="$(lsblk -no PKNAME "$root_source" 2>/dev/null | head -n1 || true)"
+    [[ -n "$root_parent" ]] && root_parent="/dev/${root_parent}"
+  fi
 
   mapfile -t DISKS < <(
-    lsblk -dn -o NAME,SIZE,TYPE,MODEL | awk '$3=="disk"{print "/dev/"$1" | "$2" | "$4}'
+    lsblk -dn -e7 -o NAME,SIZE,TYPE,MODEL | awk '
+      $3=="disk" {
+        model=$4
+        for (i=5; i<=NF; i++) model=model" "$i
+        print "/dev/"$1" | "$2" | "model
+      }
+    '
   )
 
-  local filtered=()
-  for entry in "${DISKS[@]}"; do
-    local dev="${entry%% | *}"
-    [[ "$dev" == "$root_parent" ]] && continue
-    filtered+=("$entry")
-  done
-
-  [[ ${#filtered[@]} -eq 0 ]] && {
+  if [[ ${#DISKS[@]} -eq 0 ]]; then
     error "Keine geeigneten Laufwerke gefunden."
     exit 1
-  }
+  fi
 
-  local i=1
-  for entry in "${filtered[@]}"; do
+  FILTERED_DISKS=()
+
+  for entry in "${DISKS[@]}"; do
+    dev="${entry%% | *}"
+
+    if [[ -n "$root_parent" && "$dev" == "$root_parent" ]]; then
+      warn "Überspringe laufendes Root-Laufwerk: $dev"
+      continue
+    fi
+
+    FILTERED_DISKS+=("$entry")
+  done
+
+  if [[ ${#FILTERED_DISKS[@]} -eq 0 ]]; then
+    error "Keine geeigneten Ziellaufwerke nach Filterung gefunden."
+    exit 1
+  fi
+
+  for entry in "${FILTERED_DISKS[@]}"; do
     print_option "$i" "$entry"
     ((i++))
   done
 
   while true; do
-    read -rp "$(echo -e "${BLUE}[INPUT]${NC} Auswahl: ")" choice
+    read -rp "$(echo -e "${BLUE}[INPUT]${NC} Ziellaufwerk wählen [1-${#FILTERED_DISKS[@]}]: ")" choice
 
-    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#filtered[@]} )); then
-      DISK="${filtered[$((choice-1))]%% | *}"
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#FILTERED_DISKS[@]} )); then
+      entry="${FILTERED_DISKS[$((choice-1))]}"
+      DISK="${entry%% | *}"
+
+      [[ -b "$DISK" ]] || {
+        error "Ausgewähltes Gerät existiert nicht: $DISK"
+        exit 1
+      }
+
       success "Gewählt: $DISK"
       return 0
     fi
 
-    warn "Ungültig."
+    warn "Ungültige Auswahl."
   done
 }
 
