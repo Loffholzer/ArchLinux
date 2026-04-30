@@ -146,50 +146,71 @@ installiere_snapper() {
 # =========================================
 # ⚙️ Snapper konfigurieren
 # -----------------------------------------
-# Schreibt Root-Snapshot-Konfiguration
-# → falsche Config macht Recovery nutzlos
+# Schreibt Root-Snapshot-Konfiguration ohne DBus
+# → funktioniert zuverlässig im arch-chroot
+# → vermeidet snapper create-config Service-Fehler
 # =========================================
 
 konfiguriere_snapper() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde snapper konfigurieren"
+    warn "[DRY-RUN] würde snapper ohne DBus konfigurieren"
     return 0
   fi
 
   local config_dir="/mnt/etc/snapper/configs"
   local config_file="${config_dir}/root"
 
-  mkdir -p "$config_dir"
-  mkdir -p /mnt/.snapshots
+  guard_mnt_valid_root
 
-  if [[ ! -f "$config_file" ]]; then
-    run_cmd arch-chroot /mnt snapper -c root create-config /
-  fi
+  install -d -m 755 "$config_dir"
+  install -d -m 750 /mnt/.snapshots
 
-  [[ -f "$config_file" ]] || {
-    error "Snapper Config konnte nicht erstellt werden"
-    exit 1
-  }
+  cat > "$config_file" <<'EOF'
+SUBVOLUME="/"
+FSTYPE="btrfs"
+QGROUP=""
+SPACE_LIMIT="0.5"
+FREE_LIMIT="0.2"
+ALLOW_USERS=""
+ALLOW_GROUPS="wheel"
+SYNC_ACL="yes"
+BACKGROUND_COMPARISON="yes"
+NUMBER_CLEANUP="yes"
+NUMBER_MIN_AGE="1800"
+NUMBER_LIMIT="10"
+NUMBER_LIMIT_IMPORTANT="10"
+TIMELINE_CREATE="yes"
+TIMELINE_CLEANUP="yes"
+TIMELINE_MIN_AGE="1800"
+TIMELINE_LIMIT_HOURLY="10"
+TIMELINE_LIMIT_DAILY="10"
+TIMELINE_LIMIT_WEEKLY="0"
+TIMELINE_LIMIT_MONTHLY="10"
+TIMELINE_LIMIT_YEARLY="10"
+EMPTY_PRE_POST_CLEANUP="yes"
+EMPTY_PRE_POST_MIN_AGE="1800"
+EOF
 
-  sed -i 's/^ALLOW_GROUPS=.*/ALLOW_GROUPS="wheel"/' "$config_file"
-  sed -i 's/^SYNC_ACL=.*/SYNC_ACL="yes"/' "$config_file"
-  sed -i 's/^TIMELINE_CREATE=.*/TIMELINE_CREATE="yes"/' "$config_file"
-  sed -i 's/^TIMELINE_CLEANUP=.*/TIMELINE_CLEANUP="yes"/' "$config_file"
-  sed -i 's/^NUMBER_CLEANUP=.*/NUMBER_CLEANUP="yes"/' "$config_file"
-  sed -i 's/^EMPTY_PRE_POST_CLEANUP=.*/EMPTY_PRE_POST_CLEANUP="yes"/' "$config_file"
+  chmod 640 "$config_file"
 
-  mkdir -p /mnt/etc/conf.d
+  install -d -m 755 /mnt/etc/conf.d
   echo 'SNAPPER_CONFIGS="root"' > /mnt/etc/conf.d/snapper
+  chmod 644 /mnt/etc/conf.d/snapper
 
   arch-chroot /mnt chown root:wheel /.snapshots
   chmod 750 /mnt/.snapshots
+
+  sync -f "$config_file" 2>/dev/null || sync
+  sync -f /mnt/etc/conf.d/snapper 2>/dev/null || sync
+
+  success "Snapper root-Konfiguration ohne DBus geschrieben."
 }
 
 # =========================================
 # 🔥 Snapper validieren
 # -----------------------------------------
-# Prüft Config und Snapper-Ausführbarkeit
-# → stoppt bei defektem Recovery-Setup
+# Prüft Config ohne DBus-Abhängigkeit
+# → stoppt bei defekter Recovery-Konfiguration
 # =========================================
 
 validiere_snapper() {
@@ -209,13 +230,23 @@ validiere_snapper() {
     exit 1
   }
 
+  grep -q '^FSTYPE="btrfs"$' "$config" || {
+    error "Snapper FSTYPE ist nicht korrekt"
+    exit 1
+  }
+
   grep -q '^ALLOW_GROUPS="wheel"$' "$config" || {
     error "Snapper ALLOW_GROUPS ist nicht korrekt"
     exit 1
   }
 
-  arch-chroot /mnt snapper -c root list >/dev/null 2>&1 || {
-    error "Snapper funktioniert nicht korrekt"
+  [[ -d /mnt/.snapshots ]] || {
+    error "/mnt/.snapshots fehlt"
+    exit 1
+  }
+
+  [[ "$(stat -c '%a' /mnt/.snapshots)" == "750" ]] || {
+    error "/mnt/.snapshots Rechte falsch"
     exit 1
   }
 
