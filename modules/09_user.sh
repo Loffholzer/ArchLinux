@@ -57,10 +57,7 @@ pruefe_user_variablen() {
   [[ -n "${USER_PASSWORD:-}" ]] || { error "USER_PASSWORD fehlt."; exit 1; }
 
   if [[ "${DRY_RUN:-true}" != true ]]; then
-    mountpoint -q /mnt || {
-      error "/mnt ist nicht gemountet."
-      exit 1
-    }
+    guard_mnt_valid_root
   fi
 }
 

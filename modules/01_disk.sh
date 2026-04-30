@@ -47,12 +47,16 @@ run_disk_setup() {
 # =========================================
 # 🧬 Disk erneut verifizieren
 # -----------------------------------------
-# Prüft vor destruktiven Aktionen,
-# dass DISK unverändert ist
+# Prüft vor destruktiven Aktionen, dass
+# Zielpfad, by-id, Größe und Seriennummer passen
+# → verhindert Wipe des falschen Devices
 # =========================================
 
 verify_disk_identity() {
   local current
+  local current_serial
+  local current_size
+  local current_model
 
   guard_require_var DISK
 
@@ -75,7 +79,40 @@ verify_disk_identity() {
     }
 
     [[ "$(readlink -f "$DISK_BY_ID")" == "$DISK" ]] || {
-      error "Device-Identität stimmt nicht mehr mit DISK_BY_ID überein"
+      error "Device-Identität stimmt nicht mehr mit DISK_BY_ID überein."
+      exit 1
+    }
+  fi
+
+  if [[ -n "${DISK_SERIAL:-}" ]]; then
+    current_serial="$(udevadm info --query=property --name="$DISK" 2>/dev/null | grep '^ID_SERIAL=' || true)"
+
+    [[ "$current_serial" == "$DISK_SERIAL" ]] || {
+      error "Disk SERIAL mismatch → mögliches falsches Device."
+      error "Erwartet: $DISK_SERIAL"
+      error "Aktuell:  $current_serial"
+      exit 1
+    }
+  fi
+
+  if [[ -n "${DISK_SIZE:-}" ]]; then
+    current_size="$(lsblk -dn -b -o SIZE "$DISK" 2>/dev/null || true)"
+
+    [[ "$current_size" == "$DISK_SIZE" ]] || {
+      error "Disk SIZE mismatch → mögliches falsches Device."
+      error "Erwartet: $DISK_SIZE"
+      error "Aktuell:  $current_size"
+      exit 1
+    }
+  fi
+
+  if [[ -n "${DISK_MODEL:-}" ]]; then
+    current_model="$(lsblk -dn -o MODEL "$DISK" 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
+
+    [[ "$current_model" == "$DISK_MODEL" ]] || {
+      error "Disk MODEL mismatch → mögliches falsches Device."
+      error "Erwartet: $DISK_MODEL"
+      error "Aktuell:  $current_model"
       exit 1
     }
   fi
@@ -107,8 +144,9 @@ disk_by_id_path() {
 # =========================================
 # 🔒 Disk-Eingaben prüfen
 # -----------------------------------------
-# Validiert Zielgerät, Profil und Mountstatus
-# → stoppt bei Systemdisk oder aktivem Mount
+# Validiert Zielgerät, Profil, Mountstatus
+# und speichert Device-Fingerprint
+# → stoppt bei Systemdisk, Mount oder Device-Wechsel
 # =========================================
 
 pruefe_disk_variablen() {
@@ -141,6 +179,22 @@ pruefe_disk_variablen() {
   else
     warn "Kein stabiler /dev/disk/by-id Pfad gefunden für $DISK."
   fi
+
+  DISK_SERIAL="$(udevadm info --query=property --name="$DISK" 2>/dev/null | grep '^ID_SERIAL=' || true)"
+  DISK_SIZE="$(lsblk -dn -b -o SIZE "$DISK" 2>/dev/null || true)"
+  DISK_MODEL="$(lsblk -dn -o MODEL "$DISK" 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
+
+  [[ -n "$DISK_SIZE" ]] || {
+    error "Konnte Disk-Größe nicht ermitteln: $DISK"
+    exit 1
+  }
+
+  export DISK_SERIAL DISK_SIZE DISK_MODEL
+
+  log "Disk-Fingerprint gespeichert:"
+  [[ -n "$DISK_SERIAL" ]] && log "  SERIAL: $DISK_SERIAL"
+  [[ -n "$DISK_MODEL" ]] && log "  MODEL:  $DISK_MODEL"
+  log "  SIZE:   $DISK_SIZE bytes"
 }
 
 # =========================================
@@ -289,30 +343,35 @@ ermittle_partitionen() {
 }
 
 # =========================================
-# 🧹 EFI formatieren
+# 🧹 EFI deterministisch formatieren
 # -----------------------------------------
-# Erstellt FAT32-Dateisystem auf EFI_PART
-# → Voraussetzung für UEFI-Boot
+# Erzwingt sauberes FAT32 auf EFI_PART
+# → verhindert Boot-Reste / undefinierten Zustand
 # =========================================
 
 formatiere_efi() {
   header "EFI formatieren"
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde ${EFI_PART} als FAT32 formatieren"
+    warn "[DRY-RUN] würde ${EFI_PART} deterministisch formatieren"
     return 0
   fi
 
   guard_block_device "$EFI_PART"
 
-  if blkid "$EFI_PART" | grep -qi 'TYPE="vfat"'; then
-    warn "EFI-Partition ist bereits FAT32/vfat formatiert, überspringe."
-    return 0
-  fi
+  log "Lösche alte Signaturen..."
+  run_cmd wipefs -af "$EFI_PART"
 
+  log "Erstelle FAT32..."
   run_cmd mkfs.fat -F32 -n EFI "$EFI_PART"
 
-  success "EFI-Partition formatiert: ${EFI_PART}"
-}
+  blkid "$EFI_PART" | grep -qi 'TYPE="vfat"' || {
+    error "EFI Formatierung fehlgeschlagen"
+    exit 1
+  }
 
+  sync
+
+  success "EFI sauber formatiert"
+}
 

@@ -108,34 +108,26 @@ log_to_file() {
 }
 
 # =========================================
-# 🔁 State setzen
+# 🔁 State setzen (FINAL)
 # -----------------------------------------
-# Speichert aktuellen Installationsstatus
-# → macht Fortschritt nachvollziehbar
+# Atomar + synchronisiert
 # =========================================
 
 set_state() {
   local state="$1"
-  local tmp_state
+  local tmp
 
-  [[ -n "${STATE_FILE:-}" ]] || {
-    error "STATE_FILE ist nicht gesetzt."
-    exit 1
-  }
+  tmp="$(mktemp "${STATE_FILE}.XXXX")"
 
-  [[ -d "$(dirname "$STATE_FILE")" ]] || {
-    error "State-Verzeichnis existiert nicht: $(dirname "$STATE_FILE")"
-    exit 1
-  }
+  printf '%s\n' "$state" > "$tmp"
+  chmod 600 "$tmp"
 
-  tmp_state="$(mktemp "${STATE_FILE}.tmp.XXXXXX")"
+  sync
 
-  printf '%s\n' "$state" > "$tmp_state"
-  chmod 600 "$tmp_state"
-  mv -f "$tmp_state" "$STATE_FILE"
+  mv -f "$tmp" "$STATE_FILE"
+  sync
 
-  log "Installationsstatus: $state"
-  log_to_file "STATE ${state}"
+  log "State: $state"
 }
 
 # =========================================

@@ -541,43 +541,52 @@ select_locale_manual() {
 }
 
 # =========================================
-# 🔍 Locale manuell suchen
+# 💽 Sichere Laufwerksauswahl (FINAL)
 # -----------------------------------------
-# Wählt vorhandene UTF-8 Locale aus locale.gen
-# → verhindert ungültige locale-gen Einträge
+# Filtert Systemdisk + zeigt alle realen Targets
+# → verhindert Selbstzerstörung + erlaubt USB
 # =========================================
 
 select_disk() {
-  local choice entry
+  local choice entry root_parent
 
   phase_header "Ziellaufwerk auswählen"
 
+  root_parent="$(lsblk -no PKNAME "$(findmnt -n -o SOURCE /)" 2>/dev/null | head -n1)"
+  root_parent="/dev/${root_parent}"
+
   mapfile -t DISKS < <(
-    lsblk -dn -e7 -o NAME,SIZE,TYPE,MODEL | awk '$3=="disk"{print "/dev/"$1" | "$2" | "$4}'
+    lsblk -dn -o NAME,SIZE,TYPE,MODEL | awk '$3=="disk"{print "/dev/"$1" | "$2" | "$4}'
   )
 
-  if [[ ${#DISKS[@]} -eq 0 ]]; then
-    error "Keine Laufwerke gefunden."
+  local filtered=()
+  for entry in "${DISKS[@]}"; do
+    local dev="${entry%% | *}"
+    [[ "$dev" == "$root_parent" ]] && continue
+    filtered+=("$entry")
+  done
+
+  [[ ${#filtered[@]} -eq 0 ]] && {
+    error "Keine geeigneten Laufwerke gefunden."
     exit 1
-  fi
+  }
 
   local i=1
-  for entry in "${DISKS[@]}"; do
+  for entry in "${filtered[@]}"; do
     print_option "$i" "$entry"
     ((i++))
   done
 
   while true; do
-    read -rp "$(echo -e "${BLUE}[INPUT]${NC} Ziellaufwerk wählen [1-${#DISKS[@]}]: ")" choice
+    read -rp "$(echo -e "${BLUE}[INPUT]${NC} Auswahl: ")" choice
 
-    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#DISKS[@]} )); then
-      entry="${DISKS[$((choice-1))]}"
-      DISK="${entry%% | *}"
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#filtered[@]} )); then
+      DISK="${filtered[$((choice-1))]%% | *}"
       success "Gewählt: $DISK"
       return 0
     fi
 
-    warn "Ungültige Auswahl."
+    warn "Ungültig."
   done
 }
 

@@ -176,3 +176,31 @@ run_cmd() {
     exit 1
   }
 }
+
+# =========================================
+# 🧱 /mnt Root-Layout validieren
+# -----------------------------------------
+# Prüft, dass /mnt korrekt als BTRFS root
+# Subvolume (@) gemountet ist
+# → verhindert Installation ins falsche Ziel
+# =========================================
+
+guard_mnt_valid_root() {
+  mountpoint -q /mnt || {
+    error "/mnt ist nicht gemountet."
+    exit 1
+  }
+
+  findmnt -n -o FSTYPE /mnt | grep -qx "btrfs" || {
+    error "/mnt ist kein BTRFS-Dateisystem."
+    exit 1
+  }
+
+  local opts
+  opts="$(findmnt -n -o OPTIONS /mnt 2>/dev/null || true)"
+
+  [[ "$opts" == *"subvol=@"* || "$opts" == *"subvol=/@"* ]] || {
+    error "/mnt ist nicht auf root-subvolume @ gemountet."
+    exit 1
+  }
+}

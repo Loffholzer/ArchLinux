@@ -55,7 +55,7 @@ run_network_setup() {
 
 pruefe_network_variablen() {
   if [[ "${DRY_RUN:-true}" != true ]]; then
-    guard_mnt_mounted
+    guard_mnt_valid_root
   fi
 }
 
@@ -148,8 +148,9 @@ konfiguriere_firewalld() {
 # =========================================
 # 🔐 SSH härten
 # -----------------------------------------
-# Erzwingt Pubkey-only SSH ohne Root-Login
-# → verhindert Passwort-Bruteforce nach Erstboot
+# Erzwingt sichere SSH-Defaults nur dann,
+# wenn ein Public-Key vorhanden ist
+# → verhindert SSH-Lockout nach Erstboot
 # =========================================
 
 konfiguriere_ssh() {
@@ -160,9 +161,14 @@ konfiguriere_ssh() {
     return 0
   fi
 
+  guard_require_var USERNAME
+
   local conf="/mnt/etc/ssh/sshd_config"
   local dropin_dir="/mnt/etc/ssh/sshd_config.d"
   local hardening_conf="${dropin_dir}/99-installer-hardening.conf"
+  local user_home="/mnt/home/${USERNAME}"
+  local ssh_dir="${user_home}/.ssh"
+  local auth_keys="${ssh_dir}/authorized_keys"
 
   [[ -f "$conf" ]] || {
     error "sshd_config nicht gefunden: $conf"
@@ -170,6 +176,36 @@ konfiguriere_ssh() {
   }
 
   install -d -m 755 "$dropin_dir"
+
+  if [[ ! -s "$auth_keys" ]]; then
+    warn "Kein SSH authorized_keys gefunden."
+    warn "SSH wird installiert/aktiviert, aber Passwortlogin bleibt erlaubt, um Lockout zu verhindern."
+
+    cat > "$hardening_conf" <<'EOF'
+PermitRootLogin no
+PasswordAuthentication yes
+KbdInteractiveAuthentication yes
+PubkeyAuthentication yes
+MaxAuthTries 3
+LoginGraceTime 30
+X11Forwarding no
+PermitTunnel no
+EOF
+
+    chmod 644 "$hardening_conf"
+
+    arch-chroot /mnt sshd -t || {
+      error "sshd_config ist ungültig"
+      exit 1
+    }
+
+    success "SSH sicher konfiguriert: Root-Login aus, Passwortlogin bleibt als Fallback aktiv."
+    return 0
+  fi
+
+  chmod 700 "$ssh_dir"
+  chmod 600 "$auth_keys"
+  arch-chroot /mnt chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}/.ssh"
 
   cat > "$hardening_conf" <<'EOF'
 PermitRootLogin no
@@ -190,7 +226,7 @@ EOF
     exit 1
   }
 
-  success "SSH gehärtet: Root aus, Passwortlogin aus, Pubkey-only."
+  success "SSH gehärtet: Root aus, Pubkey-only aktiv."
 }
 
 # =========================================

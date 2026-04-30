@@ -99,20 +99,7 @@ validiere_mnt_konsistenz() {
     return 0
   fi
 
-  guard_mnt_mounted
-
-  findmnt -n -o FSTYPE /mnt | grep -qx "btrfs" || {
-    error "/mnt ist kein BTRFS → falscher Installationszustand"
-    exit 1
-  }
-
-  local options
-  options="$(findmnt -n -o OPTIONS /mnt)"
-
-  [[ "$options" == *"subvol=@"* || "$options" == *"subvol=/@"* ]] || {
-    error "/mnt ist nicht auf Subvolume @ gemountet"
-    exit 1
-  }
+  guard_mnt_valid_root
 }
 
 # =========================================
@@ -124,13 +111,44 @@ validiere_mnt_konsistenz() {
 
 generiere_fstab() {
   if [[ "${DRY_RUN:-true}" == true ]]; then
-    warn "[DRY-RUN] würde fstab generieren"
+    warn "[DRY-RUN] würde fstab deterministisch generieren"
     return 0
   fi
 
-  log "Generiere fstab..."
+  log "Generiere deterministische fstab..."
 
-  run_cmd genfstab -U /mnt > /mnt/etc/fstab
+  guard_require_var ROOT_DEVICE
+  guard_require_var EFI_PART
+  guard_require_var BTRFS_OPTS
+
+  local fstab="/mnt/etc/fstab"
+  local root_uuid
+  local efi_uuid
+
+  root_uuid="$(blkid -s UUID -o value "$ROOT_DEVICE")"
+  efi_uuid="$(blkid -s UUID -o value "$EFI_PART")"
+
+  [[ -n "$root_uuid" ]] || {
+    error "Root UUID konnte nicht ermittelt werden"
+    exit 1
+  }
+
+  [[ -n "$efi_uuid" ]] || {
+    error "EFI UUID konnte nicht ermittelt werden"
+    exit 1
+  }
+
+  cat > "$fstab" <<EOF
+# <file system> <mount point> <type> <options> <dump> <pass>
+
+UUID=${root_uuid}  /             btrfs  ${BTRFS_OPTS},subvol=@           0 0
+UUID=${root_uuid}  /home         btrfs  ${BTRFS_OPTS},subvol=@home       0 0
+UUID=${root_uuid}  /.snapshots   btrfs  ${BTRFS_OPTS},subvol=@snapshots  0 0
+
+UUID=${efi_uuid}   /boot         vfat   defaults                         0 2
+EOF
+
+  success "fstab deterministisch erstellt."
 }
 
 # =========================================

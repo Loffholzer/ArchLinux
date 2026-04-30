@@ -46,15 +46,12 @@ run_base_install() {
 # 🔒 Base-Voraussetzungen prüfen
 # -----------------------------------------
 # Validiert Ziel-Mountpoint /mnt
-# → verhindert Installation ins Live-System
+# → verhindert Installation ins falsche Ziel
 # =========================================
 
 pruefe_base_variablen() {
   if [[ "${DRY_RUN:-true}" != true ]]; then
-    mountpoint -q /mnt || {
-      error "/mnt ist nicht gemountet. Abbruch."
-      exit 1
-    }
+    guard_mnt_valid_root
   fi
 }
 

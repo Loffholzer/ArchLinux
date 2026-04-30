@@ -64,7 +64,7 @@ pruefe_bootloader_variablen() {
   if [[ "${DRY_RUN:-true}" != true ]]; then
     guard_block_device "$EFI_PART"
     guard_block_device "$ROOT_DEVICE"
-    guard_mnt_mounted
+    guard_mnt_valid_root
   fi
 }
 
@@ -166,8 +166,9 @@ EOF
 # =========================================
 # ⚙️ mkinitcpio Hooks setzen
 # -----------------------------------------
-# Konfiguriert initramfs für Standard/LUKS
-# → falsche Hooks verhindern Root-Mount
+# Konfiguriert initramfs für Standard/LUKS,
+# Tastatur und BTRFS
+# → falsche Hooks verhindern den Boot
 # =========================================
 
 konfiguriere_mkinitcpio() {
@@ -180,18 +181,48 @@ konfiguriere_mkinitcpio() {
 
   guard_require_var ROOT_DEVICE
 
+  [[ -f "$conf" ]] || {
+    error "mkinitcpio.conf fehlt: $conf"
+    exit 1
+  }
+
   if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap consolefont encrypt filesystems fsck)/' "$conf"
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/' "$conf"
   else
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect modconf block keyboard keymap consolefont filesystems fsck)/' "$conf"
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block filesystems fsck)/' "$conf"
   fi
+
+  grep -q '^HOOKS=' "$conf" || {
+    error "HOOKS wurden nicht in mkinitcpio.conf gesetzt"
+    exit 1
+  }
+
+  if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
+    grep -q 'encrypt' "$conf" || {
+      error "mkinitcpio HOOKS enthalten kein encrypt für LUKS"
+      exit 1
+    }
+  fi
+
+  grep -q 'keyboard' "$conf" || {
+    error "mkinitcpio HOOKS enthalten kein keyboard"
+    exit 1
+  }
+
+  grep -q 'filesystems' "$conf" || {
+    error "mkinitcpio HOOKS enthalten kein filesystems"
+    exit 1
+  }
+
+  success "mkinitcpio Hooks gesetzt."
 }
 
 # =========================================
 # 💥 initramfs bauen
 # -----------------------------------------
-# Erstellt initramfs für installierte Kernel
-# → fehlendes Image macht System unbootbar
+# Erstellt initramfs für alle installierten
+# Kernel und validiert die Bootartefakte
+# → fehlende Images machen das System unbootbar
 # =========================================
 
 baue_initramfs() {
@@ -200,16 +231,33 @@ baue_initramfs() {
     return 0
   fi
 
+  guard_mnt_valid_root
+
   log "Baue initramfs..."
 
   run_cmd arch-chroot /mnt mkinitcpio -P
 
   [[ -f /mnt/boot/initramfs-linux.img ]] || {
-    error "initramfs fehlt → System nicht bootfähig"
+    error "initramfs-linux.img fehlt → System nicht bootfähig"
     exit 1
   }
 
-  success "initramfs erstellt."
+  [[ -f /mnt/boot/initramfs-linux-lts.img ]] || {
+    error "initramfs-linux-lts.img fehlt → LTS-Boot nicht möglich"
+    exit 1
+  }
+
+  [[ -s /mnt/boot/initramfs-linux.img ]] || {
+    error "initramfs-linux.img ist leer → System nicht bootfähig"
+    exit 1
+  }
+
+  [[ -s /mnt/boot/initramfs-linux-lts.img ]] || {
+    error "initramfs-linux-lts.img ist leer → LTS-Boot nicht möglich"
+    exit 1
+  }
+
+  success "initramfs erstellt und validiert."
 }
 
 # =========================================
@@ -291,26 +339,29 @@ get_root_uuid() {
 
 build_cmdline() {
   local root_uuid
-  root_uuid="$(get_root_uuid)"
-
-  [[ -n "$root_uuid" ]] || {
-    error "ROOT UUID fehlt"
-    exit 1
-  }
 
   if [[ -n "${ROOT_MAPPER_NAME:-}" ]]; then
     guard_require_var ROOT_BASE_DEVICE
+    guard_require_var ROOT_MAPPER_NAME
 
-    local crypt_uuid
-    crypt_uuid="$(blkid -s UUID -o value "$ROOT_BASE_DEVICE")"
+    root_uuid="$(blkid -s UUID -o value "$ROOT_BASE_DEVICE")"
 
-    [[ -n "$crypt_uuid" ]] || {
-      error "crypt UUID fehlt"
+    [[ -n "$root_uuid" ]] || {
+      error "LUKS UUID fehlt"
       exit 1
     }
 
-    echo "cryptdevice=UUID=${crypt_uuid}:${ROOT_MAPPER_NAME} root=/dev/mapper/${ROOT_MAPPER_NAME} rootflags=subvol=@ rw"
+    echo "cryptdevice=UUID=${root_uuid}:${ROOT_MAPPER_NAME} root=/dev/mapper/${ROOT_MAPPER_NAME} rootflags=subvol=@ rw"
   else
+    guard_require_var ROOT_DEVICE
+
+    root_uuid="$(blkid -s UUID -o value "$ROOT_DEVICE")"
+
+    [[ -n "$root_uuid" ]] || {
+      error "Root UUID fehlt"
+      exit 1
+    }
+
     echo "root=UUID=${root_uuid} rootflags=subvol=@ rw"
   fi
 }
@@ -318,8 +369,9 @@ build_cmdline() {
 # =========================================
 # 📝 Limine-Konfiguration schreiben
 # -----------------------------------------
-# Erstellt Bootmenü inkl. Snapshot-Marker
-# → ermöglicht sichere spätere Recovery-Einträge
+# Erstellt Bootmenü inkl. Microcode und
+# Snapshot-Marker
+# → Hauptboot bleibt stabil und erweiterbar
 # =========================================
 
 erstelle_limine_config() {
@@ -329,7 +381,15 @@ erstelle_limine_config() {
   fi
 
   local cmdline
+  local microcode_path=""
+
   cmdline="$(build_cmdline)"
+
+  if [[ "${MICROCODE_PKG:-}" == "intel-ucode" ]]; then
+    microcode_path="/intel-ucode.img"
+  elif [[ "${MICROCODE_PKG:-}" == "amd-ucode" ]]; then
+    microcode_path="/amd-ucode.img"
+  fi
 
   mkdir -p /mnt/boot/limine
 
@@ -339,12 +399,30 @@ timeout: 5
 /Arch Linux
     protocol: linux
     kernel_path: boot():/vmlinuz-linux
+EOF
+
+  if [[ -n "$microcode_path" ]]; then
+    cat >> /mnt/boot/limine.conf <<EOF
+    module_path: boot():${microcode_path}
+EOF
+  fi
+
+  cat >> /mnt/boot/limine.conf <<EOF
     module_path: boot():/initramfs-linux.img
     cmdline: ${cmdline}
 
 /Arch Linux LTS
     protocol: linux
     kernel_path: boot():/vmlinuz-linux-lts
+EOF
+
+  if [[ -n "$microcode_path" ]]; then
+    cat >> /mnt/boot/limine.conf <<EOF
+    module_path: boot():${microcode_path}
+EOF
+  fi
+
+  cat >> /mnt/boot/limine.conf <<EOF
     module_path: boot():/initramfs-linux-lts.img
     cmdline: ${cmdline}
 
@@ -354,7 +432,7 @@ timeout: 5
 #+SNAPSHOT_ENTRIES_END
 EOF
 
-  if [[ -n "$MEMTEST_PATH" ]]; then
+  if [[ -n "${MEMTEST_PATH:-}" ]]; then
     cat >> /mnt/boot/limine.conf <<EOF
 
 /Memtest86+
@@ -367,7 +445,8 @@ EOF
 # =========================================
 # 🔥 Boot-Setup validieren
 # -----------------------------------------
-# Prüft Kernel, initramfs, EFI und Konsistenz
+# Prüft Kernel, initramfs, EFI, Microcode
+# und Limine-Konfiguration
 # → verhindert unbootbares System
 # =========================================
 
@@ -396,12 +475,23 @@ validiere_boot_setup() {
     exit 1
   }
 
+  if [[ "${MICROCODE_PKG:-}" == "intel-ucode" ]]; then
+    [[ -f /mnt/boot/intel-ucode.img ]] || {
+      error "Intel Microcode fehlt in /boot"
+      exit 1
+    }
+  elif [[ "${MICROCODE_PKG:-}" == "amd-ucode" ]]; then
+    [[ -f /mnt/boot/amd-ucode.img ]] || {
+      error "AMD Microcode fehlt in /boot"
+      exit 1
+    }
+  fi
+
   [[ -f /mnt/boot/EFI/BOOT/BOOTX64.EFI ]] || {
     error "EFI Bootloader fehlt"
     exit 1
   }
 
-  # Limine Config prüfen
   [[ -f /mnt/boot/limine.conf ]] || {
     error "limine.conf fehlt"
     exit 1
@@ -409,6 +499,21 @@ validiere_boot_setup() {
 
   grep -q "protocol: linux" /mnt/boot/limine.conf || {
     error "limine.conf enthält keine Linux-Einträge"
+    exit 1
+  }
+
+  grep -q "rootflags=subvol=@" /mnt/boot/limine.conf || {
+    error "limine.conf enthält kein rootflags=subvol=@"
+    exit 1
+  }
+
+  grep -q '^#+SNAPSHOT_ENTRIES_BEGIN$' /mnt/boot/limine.conf || {
+    error "Snapshot-Block BEGIN fehlt in limine.conf"
+    exit 1
+  }
+
+  grep -q '^#+SNAPSHOT_ENTRIES_END$' /mnt/boot/limine.conf || {
+    error "Snapshot-Block END fehlt in limine.conf"
     exit 1
   }
 

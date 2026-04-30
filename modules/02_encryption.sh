@@ -158,3 +158,26 @@ richte_luks_ein() {
 
   success "LUKS geöffnet: ${ROOT_DEVICE}"
 }
+
+# =========================================
+# 💾 LUKS Header sichern
+# -----------------------------------------
+# Erstellt Backup für Recovery
+# → verhindert Totalverlust bei Header-Corruption
+# =========================================
+
+backup_luks_header() {
+  local backup="/mnt/root/luks-header.img"
+
+  guard_require_var ROOT_PART
+
+  cryptsetup luksHeaderBackup "$ROOT_PART" --header-backup-file "$backup" || {
+    error "LUKS Header Backup fehlgeschlagen"
+    exit 1
+  }
+
+  chmod 600 "$backup"
+  sync
+
+  success "LUKS Header gesichert: $backup"
+}

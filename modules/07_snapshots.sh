@@ -55,7 +55,7 @@ pruefe_snapshot_variablen() {
   guard_require_var ROOT_DEVICE
 
   if [[ "${DRY_RUN:-true}" != true ]]; then
-    guard_mnt_mounted
+    guard_mnt_valid_root
   fi
 }
 
