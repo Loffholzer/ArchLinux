@@ -154,7 +154,8 @@ disk_format_and_subvols() {
     fi
 
     log "Formatiere EFI ($PART_EFI) mit FAT32..."
-    mkfs.fat -F3 -n ESP "$PART_EFI" >/dev/null || { error "FAT32 Formatierung fehlgeschlagen."; exit 1; }
+    # FIX: Korrekter Parameter für FAT32 ist '-F 32', nicht '-F3'
+    mkfs.fat -F 32 -n ESP "$PART_EFI" >/dev/null || { error "FAT32 Formatierung fehlgeschlagen."; exit 1; }
 
     log "Formatiere ROOT ($TARGET_ROOT) mit BTRFS..."
     mkfs.btrfs -L ROOT -f "$TARGET_ROOT" >/dev/null || { error "BTRFS Formatierung fehlgeschlagen."; exit 1; }

@@ -124,6 +124,9 @@ serv_snapper() {
 # Zweck:    Automatisches Boot-Menü Update
 # Aufgabe:  Schreibt Sync-Skript und Pacman-Hook
 # =========================================
+# =========================================
+# 🪝 Helper: _create_limine_hook
+# =========================================
 _create_limine_hook() {
     log "Erstelle Limine-Snapper Sync Skript..."
 
@@ -137,7 +140,9 @@ LIMINE_CONF=$(find /boot -maxdepth 2 -name "limine.conf" | head -n 1)
 
 # Finde den Main-Eintrag in limine.conf um Parameter (LUKS UUIDs etc) zu kopieren
 CMDLINE=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "CMDLINE" | head -n 1 | cut -d '=' -f 2-)
-PROTOCOL=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "PROTOCOL" | head -n 1 | cut -d '=' -f 2)
+PROTOCOL=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "PROTOCOL" | head -n 1 | cut -d '=' -f 2-)
+KERNEL_PATH=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "KERNEL_PATH" | head -n 1 | cut -d '=' -f 2-)
+MODULE_PATH=$(grep -A 5 "Arch Linux (Mainline)" "$LIMINE_CONF" | grep "MODULE_PATH" | head -n 1 | cut -d '=' -f 2-)
 
 # Entferne alte Snapshot-Einträge (alles nach der Trennlinie)
 sed -i '/^# === SNAPSHOTS ===/,$d' "$LIMINE_CONF"
@@ -150,15 +155,17 @@ snapper -c root list | tail -n +3 | tail -n 5 | while read -r line; do
     snap_num=$(echo "$line" | awk '{print $1}' | tr -d '*')
     snap_date=$(echo "$line" | awk '{print $3, $4, $5, $6}')
 
-    # Ersetze in der CMDLINE das rootflags=subvol=@ durch subvol=@snapshots/$snap_num/snapshot
+    # Ersetze Pfade dynamisch für BTRFS-Rollbacks (greift bei Limine Standard & LUKS Profil)
     SNAP_CMDLINE=$(echo "$CMDLINE" | sed "s|subvol=@|subvol=@snapshots/$snap_num/snapshot|")
+    SNAP_KERNEL=$(echo "$KERNEL_PATH" | sed "s|/@/|/@snapshots/$snap_num/snapshot/|")
+    SNAP_MODULE=$(echo "$MODULE_PATH" | sed "s|/@/|/@snapshots/$snap_num/snapshot/|")
 
     cat <<ENTRY >> "$LIMINE_CONF"
 
 :Snapshot #$snap_num ($snap_date)
     PROTOCOL=$PROTOCOL
-    KERNEL_PATH=boot:///vmlinuz-linux
-    MODULE_PATH=boot:///initramfs-linux.img
+    KERNEL_PATH=$SNAP_KERNEL
+    MODULE_PATH=$SNAP_MODULE
     CMDLINE=$SNAP_CMDLINE
 ENTRY
 done

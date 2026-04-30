@@ -48,6 +48,7 @@ users_accounts() {
 
     log "Konfiguriere Sudo (Wheel-Group)..."
     echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/wheel
+    chmod 0440 /mnt/etc/sudoers.d/wheel # FIX: Zwingende Berechtigung für Sudo
 
     success "Benutzerverwaltung abgeschlossen."
 }
@@ -257,7 +258,11 @@ users_aur() {
 
     log "Lade und baue paru-bin via makepkg (als User $USERNAME)..."
 
-    # Der Build-Prozess darf nicht als root laufen. Wir wechseln per sudo -u.
+    # FIX: Temporäres NOPASSWD setzen, um Sudo-Deadlock im Chroot zu verhindern
+    chmod 0640 /mnt/etc/sudoers.d/wheel
+    echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > /mnt/etc/sudoers.d/wheel
+    chmod 0440 /mnt/etc/sudoers.d/wheel
+
     arch-chroot /mnt sudo -u "$USERNAME" bash -c '
         cd ~
         git clone https://aur.archlinux.org/paru-bin.git
@@ -266,6 +271,11 @@ users_aur() {
         cd ..
         rm -rf paru-bin
     ' >/dev/null 2>&1 || warn "Paru Build fehlgeschlagen (eventuell Netzwerk?)."
+
+    # FIX: Sicherheit wiederherstellen
+    chmod 0640 /mnt/etc/sudoers.d/wheel
+    echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/wheel
+    chmod 0440 /mnt/etc/sudoers.d/wheel
 
     success "Paru-bin erfolgreich installiert."
 }
