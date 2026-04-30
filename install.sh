@@ -52,23 +52,12 @@ load_module() {
 # 🚀 Funktion: main
 # -----------------------------------------
 # Zweck:    Sequenzielle Abarbeitung
-# Aufgabe:  Triggert alle Phasen (01 bis 99)
+# Aufgabe:  Triggert alle Phasen (00 bis 99)
 # =========================================
 main() {
     # 1. Utils & Config
     load_module "01_utils.sh" "run_utils"
-
-    if [[ -f "${MOD_DIR}/00_config.sh" ]]; then
-        # shellcheck disable=SC1090,SC1091
-        source "${MOD_DIR}/00_config.sh"
-        collect_config
-        validate_config
-        confirm_config
-        export_config
-    else
-        echo -e "\033[1;31m[FEHLER]\033[0m Modul 00_config.sh fehlt!"
-        exit 1
-    fi
+    load_module "00_config.sh" "run_config"
 
     # 2. Ausführung der Phasen
     load_module "02_prep.sh" "run_prep"

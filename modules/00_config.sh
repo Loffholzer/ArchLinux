@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
 
 # =========================================
-# 00_config.sh
+# 📦 Arch Installer Modul
 # -----------------------------------------
-# Konfigurationsmodul
+# Name:      00_config.sh
+# Zweck:     Benutzerkonfiguration erfassen
 #
 # Aufgabe:
-# - sammelt alle Benutzereingaben
-# - validiert Eingaben
-# - zeigt Zusammenfassung + Bestätigung
+# - sammelt Installationsparameter
+# - validiert Eingaben vor destruktiven Schritten
+# - exportiert Konfiguration für alle Module
 #
 # Wichtig:
-# - keine destruktiven Aktionen
-# - respektiert DRY_RUN
+# - keine Systemänderungen
+# - AUTO_MODE nur im DRY_RUN zulässig
+# - falsche Werte können Datenverlust/Boot-Fail auslösen
 # =========================================
-
+# ⚙️ Coding-Guidelines
+# -----------------------------------------
+# 1. Keine destruktiven Aktionen
+# 2. Eingaben immer validieren
+# 3. Sichere Defaults erzwingen
+# 4. Secrets nie ausgeben oder loggen
+# =========================================
 
 # =========================
 # 🤖 Presets / AUTO-MODE
@@ -23,7 +31,14 @@
 AUTO_MODE="${AUTO_MODE:-false}"
 declare -a LOCALES=()
 
+CONSOLE_FONT="${CONSOLE_FONT:-ter-v28n}"
 
+# =========================================
+# 🤖 AUTO_MODE Defaults setzen
+# -----------------------------------------
+# Setzt Testwerte für nicht-interaktive Runs
+# → nur mit DRY_RUN sicher zulässig
+# =========================================
 set_default_config() {
   header "AUTO-MODE"
 
@@ -52,25 +67,33 @@ set_default_config() {
   INSTALL_TOOLS="yes"
   INSTALL_AUR="yes"
   INSTALL_EDITOR="yes"
+  INSTALL_SSH="yes"
+
+  CONSOLE_FONT="ter-v28n"
 }
 
-# =========================
-# 📤 Config exportieren
-# =========================
-
+# =========================================
+# 📤 Konfiguration exportieren
+# -----------------------------------------
+# Macht validierte Werte für Module verfügbar
+# → verhindert implizite/fehlende Parameter
+# =========================================
 export_config() {
-  # Hardware-Variable hinzugefügt
-  export KEYMAP TIMEZONE LOCALES LANG_DEFAULT
+  export KEYMAP TIMEZONE LANG_DEFAULT
   export DISK INSTALL_PROFILE USE_LUKS
   export HOSTNAME USERNAME USER_PASSWORD LUKS_PASSWORD
   export DISABLE_ROOT ENABLE_MULTILIB MICROCODE_PKG
   export INSTALL_SHELL INSTALL_TOOLS INSTALL_AUR INSTALL_EDITOR
+  export INSTALL_SSH
+  export CONSOLE_FONT
 }
 
-# =========================
-# 🔧 Helper
-# =========================
-
+# =========================================
+# ❓ Ja/Nein Eingabe abfragen
+# -----------------------------------------
+# Normalisiert Benutzerantworten auf yes/no
+# → verhindert mehrdeutige Entscheidungen
+# =========================================
 ask_yes_no() {
   local prompt="$1"
   local answer
@@ -95,10 +118,12 @@ ask_yes_no() {
   done
 }
 
-# =========================
-# 🔒 Checks
-# =========================
-
+# =========================================
+# 🔒 Root-Rechte prüfen
+# -----------------------------------------
+# Erzwingt Ausführung als root
+# → verhindert halbe Installation durch Rechtefehler
+# =========================================
 check_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
     error "Bitte als root ausführen."
@@ -108,6 +133,12 @@ check_root() {
   return 0
 }
 
+# =========================================
+# 🖥️ UEFI-Modus prüfen
+# -----------------------------------------
+# Bricht auf BIOS/Legacy-Systemen ab
+# → Bootloader-Setup ist nur für UEFI gebaut
+# =========================================
 check_uefi() {
   if [[ ! -d /sys/firmware/efi ]]; then
     error "UEFI erforderlich."
@@ -117,22 +148,32 @@ check_uefi() {
   return 0
 }
 
-# =========================
-# 🔍 Validierung
-# =========================
-
+# =========================================
+# 🔤 Hostname validieren
+# -----------------------------------------
+# Prüft Hostname auf sichere Zeichen
+# → verhindert spätere Netzwerk-/Configfehler
+# =========================================
 validate_hostname_value() {
   [[ "$1" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]
 }
 
+# =========================================
+# 👤 Benutzername validieren
+# -----------------------------------------
+# Prüft Linux-kompatiblen Usernamen
+# → verhindert fehlerhafte User-Erstellung
+# =========================================
 validate_username_value() {
   [[ "$1" =~ ^[a-z_][a-z0-9_-]*$ ]]
 }
 
-# =========================
-# ⌨️ Keyboard
-# =========================
-
+# =========================================
+# ⌨️ Tastaturlayout auswählen
+# -----------------------------------------
+# Setzt gültige Keymap für Live-System
+# → verhindert falsche Passworteingaben
+# =========================================
 select_keyboard() {
   local choice
   local detected=""
@@ -226,10 +267,12 @@ select_keyboard() {
   fi
 }
 
-# =========================
-# 🌍 Timezone
-# =========================
-
+# =========================================
+# 🌍 Zeitzone erkennen
+# -----------------------------------------
+# Erkennt Timezone optional per IP-Service
+# → Fallback bleibt manuelle Auswahl
+# =========================================
 detect_timezone() {
   command -v curl >/dev/null 2>&1 || return 0
 
@@ -243,6 +286,12 @@ detect_timezone() {
   return 0
 }
 
+# =========================================
+# 🔍 Zeitzone manuell suchen
+# -----------------------------------------
+# Sucht gültige systemd-Timezones
+# → verhindert ungültige /etc/localtime Ziele
+# =========================================
 select_timezone_manual() {
  local search choice
  local max_results=20
@@ -294,6 +343,12 @@ select_timezone_manual() {
  done
 }
 
+# =========================================
+# 🌍 Zeitzone auswählen
+# -----------------------------------------
+# Kombiniert Auto-Erkennung und Suche
+# → setzt validierte System-Zeitzone
+# =========================================
 select_timezone() {
   local detected
   local choice
@@ -348,10 +403,12 @@ select_timezone() {
   done
 }
 
-# =========================
-# 🌐 Locale
-# =========================
-
+# =========================================
+# 🌐 Locale auswählen
+# -----------------------------------------
+# Wählt Systemsprache mit en_US Fallback
+# → verhindert kaputte Locale-Konfiguration
+# =========================================
 select_locale() {
   local detected=""
   local choice
@@ -400,6 +457,12 @@ select_locale() {
   done
 }
 
+# =========================================
+# 🔍 Locale manuell suchen
+# -----------------------------------------
+# Durchsucht locale.gen und ermöglicht
+# gezielte Auswahl verfügbarer Locales
+# =========================================
 select_locale_manual() {
   local search choice selected
   local max_results=20
@@ -464,36 +527,79 @@ select_locale_manual() {
   done
 }
 
-# =========================
-# 💽 Disk Auswahl
-# =========================
-
+# =========================================
+# 💽 Sichere Laufwerksauswahl
+# -----------------------------------------
+# Erkennt reale Zielgeräte robust auf ArchISO
+# → verhindert Abbruch durch Overlay-/Live-System
+# → erlaubt SATA, NVMe, MMC und USB-Ziele
+# =========================================
 select_disk() {
   local choice entry
+  local root_source=""
+  local root_parent=""
+  local dev=""
+  local i=1
 
   phase_header "Ziellaufwerk auswählen"
 
+  root_source="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+
+  if [[ -n "$root_source" && -b "$root_source" ]]; then
+    root_parent="$(lsblk -no PKNAME "$root_source" 2>/dev/null | head -n1 || true)"
+    [[ -n "$root_parent" ]] && root_parent="/dev/${root_parent}"
+  fi
+
   mapfile -t DISKS < <(
-    lsblk -dn -e7 -o NAME,SIZE,TYPE,MODEL | awk '$3=="disk"{print "/dev/"$1" | "$2" | "$4}'
+    lsblk -dn -e7 -o NAME,SIZE,TYPE,MODEL | awk '
+      $3=="disk" {
+        model=$4
+        for (i=5; i<=NF; i++) model=model" "$i
+        print "/dev/"$1" | "$2" | "model
+      }
+    '
   )
 
   if [[ ${#DISKS[@]} -eq 0 ]]; then
-    error "Keine Laufwerke gefunden."
+    error "Keine geeigneten Laufwerke gefunden."
     exit 1
   fi
 
-  local i=1
+  FILTERED_DISKS=()
+
   for entry in "${DISKS[@]}"; do
+    dev="${entry%% | *}"
+
+    if [[ -n "$root_parent" && "$dev" == "$root_parent" ]]; then
+      warn "Überspringe laufendes Root-Laufwerk: $dev"
+      continue
+    fi
+
+    FILTERED_DISKS+=("$entry")
+  done
+
+  if [[ ${#FILTERED_DISKS[@]} -eq 0 ]]; then
+    error "Keine geeigneten Ziellaufwerke nach Filterung gefunden."
+    exit 1
+  fi
+
+  for entry in "${FILTERED_DISKS[@]}"; do
     print_option "$i" "$entry"
     ((i++))
   done
 
   while true; do
-    read -rp "$(echo -e "${BLUE}[INPUT]${NC} Ziellaufwerk wählen [1-${#DISKS[@]}]: ")" choice
+    read -rp "$(echo -e "${BLUE}[INPUT]${NC} Ziellaufwerk wählen [1-${#FILTERED_DISKS[@]}]: ")" choice
 
-    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#DISKS[@]} )); then
-      entry="${DISKS[$((choice-1))]}"
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#FILTERED_DISKS[@]} )); then
+      entry="${FILTERED_DISKS[$((choice-1))]}"
       DISK="${entry%% | *}"
+
+      [[ -b "$DISK" ]] || {
+        error "Ausgewähltes Gerät existiert nicht: $DISK"
+        exit 1
+      }
+
       success "Gewählt: $DISK"
       return 0
     fi
@@ -502,10 +608,12 @@ select_disk() {
   done
 }
 
-# =========================
-# 🧩 Installationsprofil
-# =========================
-
+# =========================================
+# 🧩 Installationsprofil auswählen
+# -----------------------------------------
+# Setzt Standard- oder LUKS-Layout
+# → steuert spätere Disk-/Bootlogik
+# =========================================
 select_install_profile() {
   local choice
 
@@ -535,10 +643,12 @@ select_install_profile() {
   done
 }
 
-# =========================
-# 🔐 Passwörter
-# =========================
-
+# =========================================
+# 🔐 Passwörter abfragen
+# -----------------------------------------
+# Erfasst User- und optional LUKS-Passwort
+# → Secrets niemals ausgeben oder loggen
+# =========================================
 ask_passwords() {
   while true; do
     read -rsp "$(echo -e "${BLUE}[INPUT]${NC} Benutzer-Passwort: ")" USER_PASSWORD
@@ -571,16 +681,24 @@ ask_passwords() {
   fi
 }
 
-# =========================
-# 🧠 Config sammeln
-# =========================
-
+# =========================================
+# 🧠 Konfiguration sammeln
+# -----------------------------------------
+# Führt alle interaktiven Eingaben aus
+# → Grundlage für destruktive Module
+# =========================================
 collect_config() {
- if [[ "$AUTO_MODE" == true ]]; then
-  warn "[AUTO-MODE] Verwende Standardkonfiguration"
-  set_default_config
-  return
- fi
+  if [[ "$AUTO_MODE" == true ]]; then
+    if [[ "${DRY_RUN:-true}" != true ]]; then
+      error "AUTO_MODE darf nicht mit DRY_RUN=false laufen."
+      error "Grund: AUTO_MODE nutzt Standardwerte wie DISK=/dev/sda und ein Standardpasswort."
+      exit 1
+    fi
+
+    warn "[AUTO-MODE] Verwende Standardkonfiguration"
+    set_default_config
+    return
+  fi
 
   clear
   header "Arch Install Config"
@@ -618,12 +736,17 @@ collect_config() {
   INSTALL_TOOLS="$(ask_yes_no "CLI-Tools installieren?")"
   INSTALL_AUR="$(ask_yes_no "Paru installieren?")"
   INSTALL_EDITOR="$(ask_yes_no "Nano-Setup installieren?")"
+
+  echo
+  INSTALL_SSH="$(ask_yes_no "SSH (OpenSSH) installieren und aktivieren?")"
 }
 
-# =========================
-# ✔ Validierung
-# =========================
-
+# =========================================
+# ✔ Konfiguration validieren
+# -----------------------------------------
+# Prüft Pflichtwerte und Zielgerät
+# → stoppt vor gefährlichen Operationen
+# =========================================
 validate_config() {
   header "Validierung"
 
@@ -643,10 +766,12 @@ validate_config() {
   success "Konfiguration gültig."
 }
 
-# =========================
-# 📋 Bestätigung
-# =========================
-
+# =========================================
+# 📋 Konfiguration bestätigen
+# -----------------------------------------
+# Zeigt finalen Installationsplan
+# → letzte Sperre vor Datenverlust
+# =========================================
 confirm_config() {
   if [[ "${AUTO_MODE:-false}" == true ]]; then
     warn "[AUTO-MODE] Bestätigung wird übersprungen."
@@ -675,14 +800,15 @@ confirm_config() {
     echo "  CLI-Tools:  $INSTALL_TOOLS"
     echo "  Paru:       $INSTALL_AUR"
     echo "  Nano:       $INSTALL_EDITOR"
+    echo "  SSH:        ${INSTALL_SSH:-no}"
     echo
 
     if [[ "${DRY_RUN:-true}" == true ]]; then
-      warn "DRY-RUN aktiv: Module laufen im Testmodus, schreiben aber keine Änderungen."
+      warn "DRY-RUN aktiv: Module laufen im Testmodus und schreiben keine Änderungen."
       echo
     fi
 
-    warn "Bei echter Ausführung können alle Daten auf $DISK gelöscht werden."
+    warn "Achtung: Alle Daten auf $DISK können gelöscht werden."
     echo
 
     if [[ "$(ask_yes_no "Sind diese Angaben korrekt?")" == "yes" ]]; then
@@ -695,10 +821,12 @@ confirm_config() {
   done
 }
 
-# =========================
-# 🔍 CPU-Microcode automatisch bestimmen
-# =========================
-
+# =========================================
+# 🔍 CPU-Microcode erkennen
+# -----------------------------------------
+# Wählt Intel-/AMD-Microcodepaket
+# → verbessert Boot-Stabilität und CPU-Fixes
+# =========================================
 bestimme_microcode_paket() {
   local cpu_vendor
   cpu_vendor=$(grep -m1 'vendor_id' /proc/cpuinfo | awk '{print $3}')
@@ -720,5 +848,16 @@ bestimme_microcode_paket() {
   export MICROCODE_PKG
 }
 
-# Initialer Aufruf zur Befüllung der Variable
-bestimme_microcode_paket
+# =========================================
+# ⚙️ Modul-Einstiegspunkt: run_config
+# -----------------------------------------
+# Zweck:    Sequenzielle Abarbeitung der Config
+# Aufgabe:  Sammelt, validiert und exportiert Werte
+# =========================================
+run_config() {
+  bestimme_microcode_paket
+  collect_config
+  validate_config
+  confirm_config
+  export_config
+}

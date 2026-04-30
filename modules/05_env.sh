@@ -139,13 +139,14 @@ DEFAULT_ENTRY=1
     PROTOCOL=linux
     KERNEL_PATH=boot:///vmlinuz-linux
     MODULE_PATH=boot:///initramfs-linux.img
-    CMDLINE=cryptdevice=UUID=${root_uuid}:cryptroot root=/dev/mapper/cryptroot rootflags=subvol=@ rw quiet splash
+    # Hinzugefügt: loglevel=3 udev.log_level=3 für absolutes Schweigen vor dem Passwort
+    CMDLINE=cryptdevice=UUID=${root_uuid}:cryptroot root=/dev/mapper/cryptroot rootflags=subvol=@ rw quiet loglevel=3 udev.log_level=3
 
 :Arch Linux (LTS)
     PROTOCOL=linux
     KERNEL_PATH=boot:///vmlinuz-linux-lts
     MODULE_PATH=boot:///initramfs-linux-lts.img
-    CMDLINE=cryptdevice=UUID=${root_uuid}:cryptroot root=/dev/mapper/cryptroot rootflags=subvol=@ rw quiet splash
+    CMDLINE=cryptdevice=UUID=${root_uuid}:cryptroot root=/dev/mapper/cryptroot rootflags=subvol=@ rw quiet loglevel=3 udev.log_level=3
 EOF
     else
         # Standard: conf liegt in /boot/efi (unsere ESP)
