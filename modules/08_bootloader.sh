@@ -120,11 +120,13 @@ mounte_efi() {
 # 📦 Kernel und Boottools installieren
 # -----------------------------------------
 # Installiert Kernel, Firmware, Limine, Memtest
-# → Grundlage für Boot und Recovery
+# und Konsolenfont für initramfs
+# → verhindert consolefont/sd-vconsole Fehler
 # =========================================
 
 installiere_kernel_und_boottools() {
   local packages=(
+    terminus-font
     linux
     linux-lts
     linux-firmware
@@ -132,7 +134,7 @@ installiere_kernel_und_boottools() {
     memtest86+-efi
   )
 
-  [[ -n "$MICROCODE_PKG" ]] && packages+=("$MICROCODE_PKG")
+  [[ -n "${MICROCODE_PKG:-}" ]] && packages+=("$MICROCODE_PKG")
 
   if [[ "${DRY_RUN:-true}" == true ]]; then
     warn "[DRY-RUN] würde installieren: ${packages[*]}"
@@ -140,6 +142,11 @@ installiere_kernel_und_boottools() {
   fi
 
   run_cmd arch-chroot /mnt pacman -S --noconfirm "${packages[@]}"
+
+  [[ -f /mnt/usr/share/kbd/consolefonts/ter-v28n.psf.gz ]] || {
+    error "Konsolenfont ter-v28n fehlt trotz terminus-font Installation"
+    exit 1
+  }
 }
 
 # =========================================

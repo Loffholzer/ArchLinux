@@ -124,8 +124,9 @@ konfiguriere_mdns() {
 # =========================================
 # 🔥 Firewall konfigurieren
 # -----------------------------------------
-# Setzt firewalld auf public/DROP
+# Setzt firewalld idempotent auf public/DROP
 # → erlaubt nur explizit freigegebene Dienste
+# → akzeptiert bereits gesetzte Werte sauber
 # =========================================
 
 konfiguriere_firewalld() {
@@ -136,13 +137,51 @@ konfiguriere_firewalld() {
 
   log "Konfiguriere firewalld (secure defaults)..."
 
-  run_cmd arch-chroot /mnt firewall-offline-cmd --set-default-zone=public
-  run_cmd arch-chroot /mnt firewall-offline-cmd --zone=public --set-target=DROP
-  run_cmd arch-chroot /mnt firewall-offline-cmd --zone=public --add-service=mdns
+  arch-chroot /mnt firewall-offline-cmd --set-default-zone=public 2>/tmp/firewalld-default.err || {
+    if grep -q "ZONE_ALREADY_SET" /tmp/firewalld-default.err; then
+      warn "firewalld Default-Zone ist bereits public."
+    else
+      cat /tmp/firewalld-default.err >&2
+      error "firewalld Default-Zone konnte nicht gesetzt werden"
+      exit 1
+    fi
+  }
+
+  arch-chroot /mnt firewall-offline-cmd --zone=public --set-target=DROP 2>/tmp/firewalld-target.err || {
+    if grep -q "ALREADY_ENABLED\|ZONE_ALREADY_SET" /tmp/firewalld-target.err; then
+      warn "firewalld public target ist bereits gesetzt."
+    else
+      cat /tmp/firewalld-target.err >&2
+      error "firewalld Target konnte nicht gesetzt werden"
+      exit 1
+    fi
+  }
+
+  arch-chroot /mnt firewall-offline-cmd --zone=public --add-service=mdns 2>/tmp/firewalld-mdns.err || {
+    if grep -q "ALREADY_ENABLED" /tmp/firewalld-mdns.err; then
+      warn "firewalld mdns ist bereits erlaubt."
+    else
+      cat /tmp/firewalld-mdns.err >&2
+      error "firewalld mdns konnte nicht erlaubt werden"
+      exit 1
+    fi
+  }
 
   if [[ "${INSTALL_SSH:-no}" == "yes" ]]; then
-    run_cmd arch-chroot /mnt firewall-offline-cmd --zone=public --add-service=ssh
+    arch-chroot /mnt firewall-offline-cmd --zone=public --add-service=ssh 2>/tmp/firewalld-ssh.err || {
+      if grep -q "ALREADY_ENABLED" /tmp/firewalld-ssh.err; then
+        warn "firewalld ssh ist bereits erlaubt."
+      else
+        cat /tmp/firewalld-ssh.err >&2
+        error "firewalld ssh konnte nicht erlaubt werden"
+        exit 1
+      fi
+    }
   fi
+
+  rm -f /tmp/firewalld-default.err /tmp/firewalld-target.err /tmp/firewalld-mdns.err /tmp/firewalld-ssh.err
+
+  success "firewalld idempotent konfiguriert."
 }
 
 # =========================================
